@@ -20,9 +20,8 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -48,24 +47,42 @@ _lock = threading.Lock()
 
 
 def _today_utc() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
 def _load_state() -> dict:
     if not STATE_FILE.exists():
-        return {"date": _today_utc(), "input_tokens": 0, "output_tokens": 0,
-                "cost_usd": 0.0, "calls": 0, "by_model": {}}
+        return {
+            "date": _today_utc(),
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0.0,
+            "calls": 0,
+            "by_model": {},
+        }
     try:
-        with open(STATE_FILE, "r") as f:
+        with open(STATE_FILE) as f:
             data = json.load(f)
         if data.get("date") != _today_utc():
-            return {"date": _today_utc(), "input_tokens": 0, "output_tokens": 0,
-                    "cost_usd": 0.0, "calls": 0, "by_model": {}}
+            return {
+                "date": _today_utc(),
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_usd": 0.0,
+                "calls": 0,
+                "by_model": {},
+            }
         return data
     except Exception as e:
         logger.warning(f"cost_tracker: state read failed, resetting: {e}")
-        return {"date": _today_utc(), "input_tokens": 0, "output_tokens": 0,
-                "cost_usd": 0.0, "calls": 0, "by_model": {}}
+        return {
+            "date": _today_utc(),
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0.0,
+            "calls": 0,
+            "by_model": {},
+        }
 
 
 def _save_state(state: dict) -> None:
@@ -95,7 +112,7 @@ def _hard_cap_usd() -> float:
     return float(os.getenv("CLAUDE_DAILY_COST_HARD_STOP", "20.0"))
 
 
-def select_model() -> Optional[str]:
+def select_model() -> str | None:
     """
     호출 시 사용할 모델 결정.
     반환:
@@ -136,8 +153,9 @@ def record_usage(model: str, input_tokens: int, output_tokens: int) -> dict:
         state["cost_usd"] = float(state.get("cost_usd", 0.0)) + cost
         state["calls"] = int(state.get("calls", 0)) + 1
         by_model = state.setdefault("by_model", {})
-        m = by_model.setdefault(model, {"calls": 0, "input_tokens": 0,
-                                        "output_tokens": 0, "cost_usd": 0.0})
+        m = by_model.setdefault(
+            model, {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+        )
         m["calls"] += 1
         m["input_tokens"] += int(input_tokens)
         m["output_tokens"] += int(output_tokens)

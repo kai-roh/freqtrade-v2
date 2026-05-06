@@ -40,23 +40,26 @@ def test_get_cached_sentiment_uses_cache(claude, monkeypatch):
 
 
 def test_get_cached_sentiment_clamps_range(claude, monkeypatch):
-    monkeypatch.setattr(claude, "_call_claude",
-                        lambda *a, **k: ('{"sentiment": 99, "confidence": 1.0}', {}))
+    monkeypatch.setattr(
+        claude, "_call_claude", lambda *a, **k: ('{"sentiment": 99, "confidence": 1.0}', {})
+    )
     val = claude.get_cached_sentiment("ETH/USDT:USDT")
     assert val == 1.0
 
 
 def test_low_confidence_dampens_sentiment(claude, monkeypatch):
     # confidence 0.25 < 0.5 → sentiment *= 0.5
-    monkeypatch.setattr(claude, "_call_claude",
-                        lambda *a, **k: ('{"sentiment": 0.8, "confidence": 0.25}', {}))
+    monkeypatch.setattr(
+        claude, "_call_claude", lambda *a, **k: ('{"sentiment": 0.8, "confidence": 0.25}', {})
+    )
     val = claude.get_cached_sentiment("SOL/USDT:USDT")
     assert abs(val - (0.8 * 0.5)) < 1e-9
 
 
 def test_zero_confidence_zeroes_sentiment(claude, monkeypatch):
-    monkeypatch.setattr(claude, "_call_claude",
-                        lambda *a, **k: ('{"sentiment": 0.8, "confidence": 0.0}', {}))
+    monkeypatch.setattr(
+        claude, "_call_claude", lambda *a, **k: ('{"sentiment": 0.8, "confidence": 0.0}', {})
+    )
     val = claude.get_cached_sentiment("XRP/USDT:USDT")
     assert val == 0.0
 
@@ -76,23 +79,26 @@ def test_no_call_when_call_returns_none(claude, monkeypatch):
 
 
 def test_event_triggered_call_normalizes_action(claude, monkeypatch):
-    monkeypatch.setattr(claude, "_call_claude",
-                        lambda *a, **k: ('{"action": "BUY", "confidence": 0.8}', {}))
+    monkeypatch.setattr(
+        claude, "_call_claude", lambda *a, **k: ('{"action": "BUY", "confidence": 0.8}', {})
+    )
     out = claude.event_triggered_call("BTC/USDT:USDT", "ATR spike")
     assert out["action"] == "buy"
     assert out["confidence"] == 0.8
 
 
 def test_event_triggered_call_unknown_action_becomes_hold(claude, monkeypatch):
-    monkeypatch.setattr(claude, "_call_claude",
-                        lambda *a, **k: ('{"action": "moon", "confidence": 0.9}', {}))
+    monkeypatch.setattr(
+        claude, "_call_claude", lambda *a, **k: ('{"action": "moon", "confidence": 0.9}', {})
+    )
     out = claude.event_triggered_call("BTC/USDT:USDT", "x")
     assert out["action"] == "hold"
 
 
 def test_event_triggered_call_clamps_confidence(claude, monkeypatch):
-    monkeypatch.setattr(claude, "_call_claude",
-                        lambda *a, **k: ('{"action": "buy", "confidence": 5.0}', {}))
+    monkeypatch.setattr(
+        claude, "_call_claude", lambda *a, **k: ('{"action": "buy", "confidence": 5.0}', {})
+    )
     out = claude.event_triggered_call("BTC/USDT:USDT", "x")
     assert out["confidence"] == 1.0
 
@@ -113,9 +119,20 @@ def test_news_context_is_included_in_user_prompt(claude, monkeypatch):
 
     monkeypatch.setattr(claude, "_call_claude", fake_call)
     # news_sources를 monkeypatch해서 헤드라인 주입
-    fake_items = [type("N", (), {"title": "TestHeadline-XYZ", "source": "src",
-                                 "votes_positive": 0, "votes_negative": 0})()]
-    monkeypatch.setattr("user_data.llm.news_sources.fetch_recent_news",
-                        lambda pair, limit=5: fake_items)
+    fake_items = [
+        type(
+            "N",
+            (),
+            {
+                "title": "TestHeadline-XYZ",
+                "source": "src",
+                "votes_positive": 0,
+                "votes_negative": 0,
+            },
+        )()
+    ]
+    monkeypatch.setattr(
+        "user_data.llm.news_sources.fetch_recent_news", lambda pair, limit=5: fake_items
+    )
     claude.get_cached_sentiment("BTC/USDT:USDT")
     assert "TestHeadline-XYZ" in captured["user"]

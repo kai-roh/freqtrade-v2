@@ -19,12 +19,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
-def _coerce_float(x: Any) -> Optional[float]:
+def _coerce_float(x: Any) -> float | None:
     if x is None:
         return None
     try:
@@ -66,7 +66,7 @@ def parse_fthypt(path: Path) -> list[dict]:
     return epochs
 
 
-def best_epoch(epochs: list[dict]) -> Optional[dict]:
+def best_epoch(epochs: list[dict]) -> dict | None:
     """loss 최소 epoch 반환. loss 없으면 None."""
     candidates = [e for e in epochs if _coerce_float(e.get("loss")) is not None]
     if not candidates:
@@ -84,8 +84,7 @@ def _metric_row(e: dict) -> dict:
         "profit_total": m.get("profit_total", m.get("profit_total_ratio")),
         "sharpe": m.get("sharpe", m.get("sharpe_ratio")),
         "sortino": m.get("sortino"),
-        "mdd": m.get("max_drawdown_account",
-                     m.get("max_drawdown_abs_pct", m.get("max_drawdown"))),
+        "mdd": m.get("max_drawdown_account", m.get("max_drawdown_abs_pct", m.get("max_drawdown"))),
     }
 
 
@@ -93,8 +92,9 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--results", required=True)
     p.add_argument("--output", required=True)
-    p.add_argument("--best-params", required=True,
-                   help="path to write best epoch's params_dict as JSON")
+    p.add_argument(
+        "--best-params", required=True, help="path to write best epoch's params_dict as JSON"
+    )
     p.add_argument("--strategy", required=True)
     p.add_argument("--epochs", required=True)
     p.add_argument("--loss", required=True)
@@ -118,7 +118,7 @@ def main() -> int:
         key=lambda e: float(e["loss"]),
     )[:5]
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     L: list[str] = []
     L.append(f"# Hyperopt Report — {args.strategy}")
     L.append("")
@@ -170,7 +170,9 @@ def main() -> int:
     L.append("## How to apply")
     L.append("")
     L.append("```bash")
-    L.append("# best 파라미터를 봇에 반영하려면 hyperopt-show를 통해 확정 후 strategy 코드/.json에 주입")
+    L.append(
+        "# best 파라미터를 봇에 반영하려면 hyperopt-show를 통해 확정 후 strategy 코드/.json에 주입"
+    )
     L.append("docker compose run --rm freqtrade hyperopt-show --best")
     L.append("")
     L.append("# 또는 본 리포트의 'Best Parameters' JSON을 직접 strategy의")

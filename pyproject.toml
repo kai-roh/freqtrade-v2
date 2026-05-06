@@ -1,0 +1,50 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+    "user_data/data",
+    "user_data/models",
+    "user_data/backtest_results",
+    "user_data/hyperopt_results",
+    "user_data/llm/cache",
+    "user_data/daily_reports",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear (보수적으로)
+]
+ignore = [
+    "E501",  # line-too-long: black이 처리하므로 ruff에선 제외
+    "E731",  # lambda 할당 — 테스트에서 mock 람다를 자주 씀
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 테스트 파일은 일부 룰 완화
+"tests/**" = ["F401", "F811"]
+# strategy 파일은 freqtrade 시그니처 제약으로 unused arg 흔함
+"user_data/strategies/**" = ["B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["user_data"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+extend-exclude = '''
+/(
+    user_data/data
+  | user_data/models
+  | user_data/backtest_results
+  | user_data/hyperopt_results
+  | user_data/llm/cache
+  | user_data/daily_reports
+  | \.venv
+)/
+'''

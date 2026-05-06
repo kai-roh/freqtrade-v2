@@ -228,9 +228,16 @@
 
 **보류**: `KaiBaseStrategy` 단위 테스트는 freqtrade/talib 의존성으로 별도 Docker harness 필요. 통합 테스트로 분리 예정.
 
-#### E-2. 코드 품질
-- `ruff` + `black` 린트
-- `mypy --strict` 점진 적용 (전략 파일은 freqtrade 시그니처 제약상 일부 type ignore)
+#### E-2. 코드 품질 ✅
+**완료 (2026-05-07)**:
+1. ✅ `pyproject.toml` — ruff + black 통합 설정 (line-length 100 — 한글 주석 친화)
+2. ✅ ruff 룰셋: E/F/W/I/UP/B (E501은 black이 처리하므로 제외)
+3. ✅ `requirements-dev.txt`에 `ruff>=0.6`, `black>=24.0` 추가
+4. ✅ 기존 코드 자동 수정: ruff 57건 + 수동 5건 + black 19파일 포맷 — 한 커밋에 묶어 review 친화
+5. ✅ CI `lint` job 확장: `ruff check` + `black --check` + `bash -n`
+6. ✅ 자동 적용된 모던화: `Optional[X]` → `X | None`, `timezone.utc` → `UTC`, isort, unused import 정리, redundant `r` mode 등
+
+**보류**: `mypy --strict` — strategy 파일은 freqtrade 시그니처 제약 때문에 깊은 작업 필요. 별도 작업으로 분리.
 
 #### E-3. CI (GitHub Actions) ✅
 **완료 (2026-05-07)**:

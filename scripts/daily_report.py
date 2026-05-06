@@ -31,9 +31,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from base64 import b64encode
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
@@ -61,7 +61,7 @@ DAILY_LOSS_ALERT_PCT = float(os.getenv("DAILY_LOSS_ALERT_PCT", "5.0"))
 FEE_DIFF_ALERT_PCT = float(os.getenv("FEE_DIFF_ALERT_PCT", "5.0"))
 
 
-def _api_get(path: str, timeout: float = 5.0) -> Optional[Any]:
+def _api_get(path: str, timeout: float = 5.0) -> Any | None:
     """Freqtrade REST API GET. 실패 시 None."""
     url = f"{API_BASE}{path}"
     headers = {"Accept": "application/json"}
@@ -101,7 +101,7 @@ def _build_report(profit, status, balance, daily, fee_recon, cost_state) -> tupl
     """returns (markdown_body, alerts)"""
     alerts: list[str] = []
     L: list[str] = []
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     L.append(f"# Daily Report — {now}")
     L.append("")
 
@@ -119,14 +119,18 @@ def _build_report(profit, status, balance, daily, fee_recon, cost_state) -> tupl
         L.append("|---|---|")
         L.append(f"| Today P/L | {_pct(prof_today_ratio)} ({_f(prof_today)}) |")
         L.append(f"| Cumulative P/L | {_pct(prof_total_ratio)} ({_f(prof_total_abs)}) |")
-        L.append(f"| Closed trades (all-time) | {closed_count if closed_count is not None else '—'} |")
+        L.append(
+            f"| Closed trades (all-time) | {closed_count if closed_count is not None else '—'} |"
+        )
         L.append(f"| Latest trade | {latest_dt or '—'} |")
         L.append("")
         # Alert: 일일 손실
         try:
             today_pct = float(prof_today_ratio) * 100  # ratio → percent
             if today_pct < -DAILY_LOSS_ALERT_PCT:
-                alerts.append(f"Daily loss exceeded threshold: {today_pct:.2f}% < -{DAILY_LOSS_ALERT_PCT:.1f}%")
+                alerts.append(
+                    f"Daily loss exceeded threshold: {today_pct:.2f}% < -{DAILY_LOSS_ALERT_PCT:.1f}%"
+                )
         except (TypeError, ValueError):
             pass
     else:
@@ -144,12 +148,18 @@ def _build_report(profit, status, balance, daily, fee_recon, cost_state) -> tupl
             L.append("|---|---|---:|---:|---:|---:|")
             for t in status:
                 pair = t.get("pair", "—")
-                side = ("short" if t.get("is_short") else "long") if "is_short" in t else t.get("trade_direction", "—")
+                side = (
+                    ("short" if t.get("is_short") else "long")
+                    if "is_short" in t
+                    else t.get("trade_direction", "—")
+                )
                 entry = t.get("open_rate", "—")
                 cur = t.get("current_rate", "—")
                 pl_ratio = t.get("profit_ratio", t.get("current_profit"))
                 stake = t.get("stake_amount", "—")
-                L.append(f"| {pair} | {side} | {_f(entry, 4)} | {_f(cur, 4)} | {_pct(pl_ratio)} | {_f(stake, 2)} |")
+                L.append(
+                    f"| {pair} | {side} | {_f(entry, 4)} | {_f(cur, 4)} | {_pct(pl_ratio)} | {_f(stake, 2)} |"
+                )
         L.append("")
     else:
         L.append("_API unreachable._")
@@ -180,12 +190,16 @@ def _build_report(profit, status, balance, daily, fee_recon, cost_state) -> tupl
         loc = fee_recon["local"]
         L.append(f"- **Status**: `{st}`")
         L.append(f"- Lookback: {fee_recon['lookback_days']} days")
-        L.append(f"- Local trades / fee: {loc['trades']} / ${_f(loc['fee_usd'], 4)} "
-                 f"(effective {_f(loc['effective_rate_pct'], 4)}%)")
+        L.append(
+            f"- Local trades / fee: {loc['trades']} / ${_f(loc['fee_usd'], 4)} "
+            f"(effective {_f(loc['effective_rate_pct'], 4)}%)"
+        )
         if fee_recon.get("real"):
             real = fee_recon["real"]
-            L.append(f"- Real trades / fee: {real['trades']} / ${_f(real['fee_usd'], 4)} "
-                     f"(effective {_f(real['effective_rate_pct'], 4)}%)")
+            L.append(
+                f"- Real trades / fee: {real['trades']} / ${_f(real['fee_usd'], 4)} "
+                f"(effective {_f(real['effective_rate_pct'], 4)}%)"
+            )
         diff = fee_recon.get("diff_pct")
         if diff is not None:
             L.append(f"- Diff: **{diff:+.2f}%** (tolerance ±{fee_recon['tolerance_pct']:.1f}%)")
@@ -214,7 +228,7 @@ def _build_report(profit, status, balance, daily, fee_recon, cost_state) -> tupl
             alerts.append(f"Claude HARD CAP reached: ${cost:.2f} >= ${hard:.2f}")
             L.append("- **Action**: investigate; raise cap or wait until UTC reset")
         elif cost >= soft:
-            L.append(f"- _Soft cap active — running on fallback model._")
+            L.append("- _Soft cap active — running on fallback model._")
         by_model = cost_state.get("by_model", {})
         if by_model:
             L.append("")
@@ -267,22 +281,31 @@ def _telegram_message(profit, alerts: list[str]) -> str:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--days", type=int, default=7,
-                   help="fee reconciliation lookback days (default 7)")
-    p.add_argument("--no-write", action="store_true",
-                   help="skip writing to user_data/daily_reports/")
-    p.add_argument("--out-dir", default="/freqtrade/user_data/daily_reports",
-                   help="report output directory")
-    p.add_argument("--telegram", action="store_true",
-                   help="push alerts to Telegram (TELEGRAM_TOKEN/CHAT_ID required)")
-    p.add_argument("--telegram-always", action="store_true",
-                   help="push to Telegram even when no alerts (implies --telegram)")
+    p.add_argument(
+        "--days", type=int, default=7, help="fee reconciliation lookback days (default 7)"
+    )
+    p.add_argument(
+        "--no-write", action="store_true", help="skip writing to user_data/daily_reports/"
+    )
+    p.add_argument(
+        "--out-dir", default="/freqtrade/user_data/daily_reports", help="report output directory"
+    )
+    p.add_argument(
+        "--telegram",
+        action="store_true",
+        help="push alerts to Telegram (TELEGRAM_TOKEN/CHAT_ID required)",
+    )
+    p.add_argument(
+        "--telegram-always",
+        action="store_true",
+        help="push to Telegram even when no alerts (implies --telegram)",
+    )
     args = p.parse_args()
 
     profit = _api_get("/profit")
     status = _api_get("/status")
     balance = _api_get("/balance")
-    daily = _api_get(f"/daily?timescale=7")
+    daily = _api_get("/daily?timescale=7")
 
     api_alive = profit is not None or status is not None
     fee_recon = compute_reconciliation(lookback_days=args.days)
@@ -301,7 +324,7 @@ def main() -> int:
         try:
             out_dir = Path(args.out_dir)
             out_dir.mkdir(parents=True, exist_ok=True)
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today = datetime.now(UTC).strftime("%Y-%m-%d")
             out_path = out_dir / f"{today}.md"
             out_path.write_text(md)
             print(f"\nReport written: {out_path}", file=sys.stderr)
@@ -317,12 +340,15 @@ def main() -> int:
             print("[warn] TELEGRAM_TOKEN/CHAT_ID not set, skipping push", file=sys.stderr)
         elif alerts or args.telegram_always:
             tg_text = _telegram_message(profit, alerts)
-            ok = telegram_notify.send(tg_text, parse_mode="Markdown",
-                                      disable_notification=not bool(alerts))
+            ok = telegram_notify.send(
+                tg_text, parse_mode="Markdown", disable_notification=not bool(alerts)
+            )
             print(f"[telegram] sent: {ok}", file=sys.stderr)
         else:
-            print("[telegram] no alerts, skipping push (use --telegram-always to override)",
-                  file=sys.stderr)
+            print(
+                "[telegram] no alerts, skipping push (use --telegram-always to override)",
+                file=sys.stderr,
+            )
 
     if not api_alive:
         return 2

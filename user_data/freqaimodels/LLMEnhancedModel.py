@@ -24,13 +24,17 @@ class LLMEnhancedModel(LightGBMRegressor):
     """
 
     def fit(self, data_dictionary: dict, dk: Any, **kwargs) -> Any:
-        logger.info(f"[LLMEnhancedModel] Training on {len(data_dictionary['train_features'])} samples")
+        logger.info(
+            f"[LLMEnhancedModel] Training on {len(data_dictionary['train_features'])} samples"
+        )
         model = super().fit(data_dictionary, dk, **kwargs)
         # 피처 중요도 로깅
         try:
             importances = model.feature_importances_
             features = data_dictionary["train_features"].columns.tolist()
-            top10 = sorted(zip(features, importances), key=lambda x: x[1], reverse=True)[:10]
+            top10 = sorted(
+                zip(features, importances, strict=False), key=lambda x: x[1], reverse=True
+            )[:10]
             logger.info(f"[LLMEnhancedModel] Top10 features: {top10}")
         except Exception as e:
             logger.warning(f"Feature importance log failed: {e}")

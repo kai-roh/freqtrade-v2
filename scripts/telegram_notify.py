@@ -60,8 +60,7 @@ def _split(text: str, limit: int = MAX_LEN) -> list[str]:
     return out
 
 
-def send(text: str, parse_mode: str = "Markdown",
-         disable_notification: bool = False) -> bool:
+def send(text: str, parse_mode: str = "Markdown", disable_notification: bool = False) -> bool:
     """
     텍스트 메시지 전송. 성공 True / 실패·미구성 False.
     parse_mode: "Markdown" | "MarkdownV2" | "HTML" | None
@@ -103,10 +102,12 @@ def send(text: str, parse_mode: str = "Markdown",
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--text", help="Message body (omit to read from stdin)")
-    p.add_argument("--parse-mode", default="Markdown",
-                   choices=["Markdown", "MarkdownV2", "HTML", "none"])
-    p.add_argument("--silent", action="store_true",
-                   help="disable_notification=true (push without sound)")
+    p.add_argument(
+        "--parse-mode", default="Markdown", choices=["Markdown", "MarkdownV2", "HTML", "none"]
+    )
+    p.add_argument(
+        "--silent", action="store_true", help="disable_notification=true (push without sound)"
+    )
     args = p.parse_args()
 
     text = args.text if args.text is not None else sys.stdin.read()

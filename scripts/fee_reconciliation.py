@@ -27,9 +27,8 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 DB_PATH = Path(os.getenv("FT_DB_PATH", "/freqtrade/user_data/tradesv3.sqlite"))
 DEFAULT_LOOKBACK_DAYS = 7
@@ -38,8 +37,7 @@ TOLERANCE_PCT = 5.0  # 차이가 이 % 초과 시 alert
 
 def _config_pairs() -> list[str]:
     """config.json의 pair_whitelist를 반환. 실패 시 폴백 5종."""
-    cfg_path = Path(os.getenv("FT_CONFIG_PATH",
-                              "/freqtrade/user_data/config.json"))
+    cfg_path = Path(os.getenv("FT_CONFIG_PATH", "/freqtrade/user_data/config.json"))
     try:
         with open(cfg_path) as f:
             cfg = json.load(f)
@@ -49,8 +47,11 @@ def _config_pairs() -> list[str]:
     except Exception:
         pass
     return [
-        "BTC/USDT:USDT", "ETH/USDT:USDT",
-        "SOL/USDT:USDT", "BNB/USDT:USDT", "XRP/USDT:USDT",
+        "BTC/USDT:USDT",
+        "ETH/USDT:USDT",
+        "SOL/USDT:USDT",
+        "BNB/USDT:USDT",
+        "XRP/USDT:USDT",
     ]
 
 
@@ -58,18 +59,21 @@ def query_local_trades(lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> list[tuple
     """로컬 DB에서 최근 거래 조회. 미존재/오류 시 빈 리스트."""
     if not DB_PATH.exists():
         return []
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(days=lookback_days)).isoformat()
     con = sqlite3.connect(DB_PATH)
     try:
         cur = con.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             SELECT id, pair, is_open, open_date, close_date,
                    open_rate, close_rate, amount, fee_open, fee_close,
                    stake_amount, close_profit_abs
             FROM trades
             WHERE close_date >= ?
             ORDER BY close_date DESC
-        """, (cutoff,))
+        """,
+            (cutoff,),
+        )
         return cur.fetchall()
     finally:
         con.close()
@@ -77,8 +81,8 @@ def query_local_trades(lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> list[tuple
 
 def fetch_binance_actual_fees(
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
-    pairs: Optional[list[str]] = None,
-) -> Optional[list[dict]]:
+    pairs: list[str] | None = None,
+) -> list[dict] | None:
     """
     Binance API에서 실제 commission 조회.
     None 반환 시 비교 불가(키 미설정/네트워크 실패/ccxt 미설치).
@@ -94,14 +98,14 @@ def fetch_binance_actual_fees(
         return None
 
     try:
-        exchange = ccxt.binanceusdm({
-            "apiKey": api_key,
-            "secret": api_secret,
-            "enableRateLimit": True,
-        })
-        since = exchange.parse8601(
-            (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+        exchange = ccxt.binanceusdm(
+            {
+                "apiKey": api_key,
+                "secret": api_secret,
+                "enableRateLimit": True,
+            }
         )
+        since = exchange.parse8601((datetime.now(UTC) - timedelta(days=lookback_days)).isoformat())
         all_trades: list[dict] = []
         for pair in pairs or _config_pairs():
             try:
@@ -117,7 +121,7 @@ def fetch_binance_actual_fees(
 
 def compute_reconciliation(
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
-    pairs: Optional[list[str]] = None,
+    pairs: list[str] | None = None,
 ) -> dict:
     """
     수수료 대사 결과 dict 반환. import 가능 인터페이스.
@@ -137,8 +141,7 @@ def compute_reconciliation(
     """
     out: dict = {
         "lookback_days": lookback_days,
-        "local": {"trades": 0, "notional_usd": 0.0,
-                  "fee_usd": 0.0, "effective_rate_pct": 0.0},
+        "local": {"trades": 0, "notional_usd": 0.0, "fee_usd": 0.0, "effective_rate_pct": 0.0},
         "real": None,
         "diff_pct": None,
         "recommended_fee": None,
@@ -154,8 +157,20 @@ def compute_reconciliation(
     total_volume = 0.0
     closed_n = 0
     for t in local_trades:
-        (_tid, _pair, is_open, _od, _cd, open_r, close_r,
-         amount, fee_open, fee_close, _stake, _profit) = t
+        (
+            _tid,
+            _pair,
+            is_open,
+            _od,
+            _cd,
+            open_r,
+            close_r,
+            amount,
+            fee_open,
+            fee_close,
+            _stake,
+            _profit,
+        ) = t
         if is_open:
             continue
         if close_r is None or open_r is None or amount is None:
@@ -178,8 +193,7 @@ def compute_reconciliation(
         out["status"] = "no_binance_data"
         return out
 
-    total_real_fee = sum(float((t.get("fee") or {}).get("cost", 0) or 0)
-                         for t in binance_trades)
+    total_real_fee = sum(float((t.get("fee") or {}).get("cost", 0) or 0) for t in binance_trades)
     total_real_volume = sum(float(t.get("cost", 0) or 0) for t in binance_trades)
     real_rate = (total_real_fee / total_real_volume * 100) if total_real_volume > 0 else 0.0
     out["real"] = {
@@ -234,8 +248,9 @@ def _print_human(r: dict) -> None:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--days", type=int, default=DEFAULT_LOOKBACK_DAYS)
-    p.add_argument("--json", action="store_true",
-                   help="Emit JSON to stdout instead of human format")
+    p.add_argument(
+        "--json", action="store_true", help="Emit JSON to stdout instead of human format"
+    )
     args = p.parse_args()
 
     result = compute_reconciliation(lookback_days=args.days)

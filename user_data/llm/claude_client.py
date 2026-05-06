@@ -16,7 +16,6 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Optional
 
 from user_data.llm import cost_tracker
 
@@ -40,7 +39,7 @@ _SENTIMENT_SYSTEM = (
     "Never include code fences, prose, or trailing text. The schema is: "
     '{"sentiment": <float in [-1.0, 1.0]>, "confidence": <float in [0.0, 1.0]>, '
     '"reason": "<<=120 chars>"}. '
-    "If unsure, output {\"sentiment\": 0.0, \"confidence\": 0.0, \"reason\": \"insufficient context\"}."
+    'If unsure, output {"sentiment": 0.0, "confidence": 0.0, "reason": "insufficient context"}.'
 )
 
 _EVENT_SYSTEM = (
@@ -56,7 +55,7 @@ def _cache_path(pair: str) -> Path:
     return CACHE_DIR / f"sentiment_{safe}.json"
 
 
-def _log_failure(tag: str, raw: str, exc: Optional[Exception] = None) -> None:
+def _log_failure(tag: str, raw: str, exc: Exception | None = None) -> None:
     """파싱 실패한 raw 응답을 디스크에 기록 (디버깅용)."""
     try:
         ts = time.strftime("%Y%m%dT%H%M%S")
@@ -70,7 +69,7 @@ def _log_failure(tag: str, raw: str, exc: Optional[Exception] = None) -> None:
         logger.warning(f"[Claude] failure-log write failed: {e}")
 
 
-def _strict_parse(raw: str) -> Optional[dict]:
+def _strict_parse(raw: str) -> dict | None:
     """코드펜스/잡음 제거 후 JSON 파싱. 실패 시 None."""
     if not raw:
         return None
@@ -88,12 +87,12 @@ def _strict_parse(raw: str) -> Optional[dict]:
     if start < 0 or end < 0 or end <= start:
         return None
     try:
-        return json.loads(s[start:end + 1])
+        return json.loads(s[start : end + 1])
     except json.JSONDecodeError:
         return None
 
 
-def _call_claude(system: str, user: str, max_tokens: int) -> Optional[tuple[str, dict]]:
+def _call_claude(system: str, user: str, max_tokens: int) -> tuple[str, dict] | None:
     """
     Claude 호출 공통. 비용 가드 + JSON 강제 + 사용량 기록.
     반환: (raw_text, usage_dict) or None
@@ -163,7 +162,7 @@ def get_cached_sentiment(pair: str) -> float:
 
     if cache_file.exists():
         try:
-            with open(cache_file, "r") as f:
+            with open(cache_file) as f:
                 data = json.load(f)
             age = time.time() - float(data.get("timestamp", 0))
             if age < CACHE_TTL_SECONDS:
@@ -175,8 +174,7 @@ def get_cached_sentiment(pair: str) -> float:
 
     try:
         with open(cache_file, "w") as f:
-            json.dump({"pair": pair, "sentiment": sentiment,
-                       "timestamp": time.time()}, f)
+            json.dump({"pair": pair, "sentiment": sentiment, "timestamp": time.time()}, f)
     except Exception as e:
         logger.warning(f"Cache write failed for {pair}: {e}")
 
@@ -190,6 +188,7 @@ def _fetch_sentiment(pair: str) -> float:
     """
     try:
         from user_data.llm.news_sources import fetch_recent_news, format_for_prompt
+
         items = fetch_recent_news(pair, limit=5)
     except Exception as e:
         logger.warning(f"[Claude] news fetch failed for {pair}: {e}")
@@ -197,6 +196,7 @@ def _fetch_sentiment(pair: str) -> float:
         try:
             from user_data.llm.news_sources import format_for_prompt
         except Exception:
+
             def format_for_prompt(_items, max_items=5):  # type: ignore
                 return "(no recent news available)"
 

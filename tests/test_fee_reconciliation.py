@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
@@ -14,6 +14,7 @@ def fr(tmp_path, monkeypatch):
     db = tmp_path / "trades.sqlite"
     monkeypatch.setenv("FT_DB_PATH", str(db))
     import fee_reconciliation as fr
+
     importlib.reload(fr)
     return fr, db
 
@@ -42,11 +43,14 @@ def test_no_db_returns_no_local_trades(fr, monkeypatch, tmp_path):
 
 def test_local_only_no_binance_keys(fr, monkeypatch):
     mod, db = fr
-    yest = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-    _seed(db, [
-        (1, "BTC/USDT:USDT", 0, yest, yest, 60000.0, 60500.0, 0.01, 0.001, 0.001, 600.0, 5.0),
-        (2, "ETH/USDT:USDT", 0, yest, yest, 3000.0, 3050.0, 0.5, 0.001, 0.001, 1500.0, 25.0),
-    ])
+    yest = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    _seed(
+        db,
+        [
+            (1, "BTC/USDT:USDT", 0, yest, yest, 60000.0, 60500.0, 0.01, 0.001, 0.001, 600.0, 5.0),
+            (2, "ETH/USDT:USDT", 0, yest, yest, 3000.0, 3050.0, 0.5, 0.001, 0.001, 1500.0, 25.0),
+        ],
+    )
     monkeypatch.delenv("BINANCE_API_KEY", raising=False)
     monkeypatch.delenv("BINANCE_API_SECRET", raising=False)
     out = mod.compute_reconciliation()
@@ -58,26 +62,32 @@ def test_local_only_no_binance_keys(fr, monkeypatch):
 
 def test_open_trades_are_skipped(fr):
     mod, db = fr
-    yest = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-    _seed(db, [
-        (1, "BTC/USDT:USDT", 1, yest, yest, 60000.0, 60500.0, 0.01, 0.001, 0.001, 600.0, 0.0),
-    ])
+    yest = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    _seed(
+        db,
+        [
+            (1, "BTC/USDT:USDT", 1, yest, yest, 60000.0, 60500.0, 0.01, 0.001, 0.001, 600.0, 0.0),
+        ],
+    )
     out = mod.compute_reconciliation()
     assert out["local"]["trades"] == 0
 
 
 def test_tolerance_within_threshold(fr, monkeypatch):
     mod, db = fr
-    yest = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-    _seed(db, [
-        (1, "BTC/USDT:USDT", 0, yest, yest, 60000.0, 60500.0, 0.01,
-         0.001, 0.001, 600.0, 5.0),
-    ])
+    yest = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    _seed(
+        db,
+        [
+            (1, "BTC/USDT:USDT", 0, yest, yest, 60000.0, 60500.0, 0.01, 0.001, 0.001, 600.0, 5.0),
+        ],
+    )
     # local fee: (open+close) * amount = (60000+60500)*0.01 = 1205
     #            *0.002 / 2 = 1.205
     # 실제값을 local과 거의 같게 → diff < 5%
-    monkeypatch.setattr(mod, "fetch_binance_actual_fees",
-                        lambda *a, **k: [{"fee": {"cost": 1.20}, "cost": 1205.0}])
+    monkeypatch.setattr(
+        mod, "fetch_binance_actual_fees", lambda *a, **k: [{"fee": {"cost": 1.20}, "cost": 1205.0}]
+    )
     out = mod.compute_reconciliation()
     assert out["status"] == "ok"
     assert out["recommended_fee"] is None
@@ -86,14 +96,17 @@ def test_tolerance_within_threshold(fr, monkeypatch):
 
 def test_tolerance_exceeded_recommends_fee(fr, monkeypatch):
     mod, db = fr
-    yest = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-    _seed(db, [
-        (1, "BTC/USDT:USDT", 0, yest, yest, 60000.0, 60500.0, 0.01,
-         0.001, 0.001, 600.0, 5.0),
-    ])
+    yest = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    _seed(
+        db,
+        [
+            (1, "BTC/USDT:USDT", 0, yest, yest, 60000.0, 60500.0, 0.01, 0.001, 0.001, 600.0, 5.0),
+        ],
+    )
     # local fee = 1.205. 실제는 2.0 → diff +66%
-    monkeypatch.setattr(mod, "fetch_binance_actual_fees",
-                        lambda *a, **k: [{"fee": {"cost": 2.0}, "cost": 1205.0}])
+    monkeypatch.setattr(
+        mod, "fetch_binance_actual_fees", lambda *a, **k: [{"fee": {"cost": 2.0}, "cost": 1205.0}]
+    )
     out = mod.compute_reconciliation()
     assert out["status"] == "tolerance_exceeded"
     assert out["recommended_fee"] is not None
@@ -112,6 +125,7 @@ def test_fetch_binance_no_keys_returns_none(fr, monkeypatch):
 def test_main_json_output(fr, capsys):
     mod, _ = fr
     import sys
+
     sys.argv = ["fee_reconciliation.py", "--json", "--days", "5"]
     rc = mod.main()
     out = capsys.readouterr().out

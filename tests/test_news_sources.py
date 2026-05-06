@@ -28,8 +28,9 @@ def test_format_for_prompt_empty(news):
 
 def test_format_for_prompt_with_items(news):
     items = [
-        news.NewsItem(title="Bitcoin hits ATH", source="coindesk",
-                      votes_positive=10, votes_negative=2),
+        news.NewsItem(
+            title="Bitcoin hits ATH", source="coindesk", votes_positive=10, votes_negative=2
+        ),
         news.NewsItem(title="Inflows surge", source="decrypt"),
     ]
     out = news.format_for_prompt(items)
@@ -64,21 +65,27 @@ class _FakeResp:
 def _stub_urlopen(payload):
     def fake(req, timeout=None):
         return _FakeResp(payload)
+
     return fake
 
 
 def test_cryptopanic_provider_parses_response(news, monkeypatch):
     monkeypatch.setenv("LLM_NEWS_PROVIDER", "cryptopanic")
     monkeypatch.setenv("CRYPTOPANIC_TOKEN", "tok")
-    payload = json.dumps({
-        "results": [
-            {"title": "BTC pumps 5%", "source": {"title": "CoinDesk", "domain": "coindesk.com"},
-             "published_at": "2026-05-07T01:00:00Z", "url": "https://x",
-             "votes": {"positive": 12, "negative": 3}},
-            {"title": "ETF inflows record", "source": {"domain": "decrypt.co"},
-             "votes": {}},
-        ]
-    })
+    payload = json.dumps(
+        {
+            "results": [
+                {
+                    "title": "BTC pumps 5%",
+                    "source": {"title": "CoinDesk", "domain": "coindesk.com"},
+                    "published_at": "2026-05-07T01:00:00Z",
+                    "url": "https://x",
+                    "votes": {"positive": 12, "negative": 3},
+                },
+                {"title": "ETF inflows record", "source": {"domain": "decrypt.co"}, "votes": {}},
+            ]
+        }
+    )
     monkeypatch.setattr("urllib.request.urlopen", _stub_urlopen(payload))
     items = news.fetch_recent_news("BTC/USDT:USDT", limit=5)
     assert len(items) == 2
@@ -116,9 +123,13 @@ def test_cryptopanic_missing_token_falls_back_to_none(news, monkeypatch):
 def test_cache_hit_avoids_second_http_call(news, monkeypatch):
     monkeypatch.setenv("LLM_NEWS_PROVIDER", "cryptopanic")
     monkeypatch.setenv("CRYPTOPANIC_TOKEN", "tok")
-    payload = json.dumps({"results": [
-        {"title": "first", "source": {}, "votes": {}},
-    ]})
+    payload = json.dumps(
+        {
+            "results": [
+                {"title": "first", "source": {}, "votes": {}},
+            ]
+        }
+    )
     calls = {"n": 0}
 
     def counting(req, timeout=None):

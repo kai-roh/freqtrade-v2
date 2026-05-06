@@ -21,7 +21,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -69,17 +69,17 @@ class _CryptoPanicProvider:
 
     def fetch(self, pair: str, limit: int = 5) -> list[NewsItem]:
         currency = pair_to_currency(pair)
-        params = urllib.parse.urlencode({
-            "auth_token": self._token,
-            "currencies": currency,
-            "public": "true",
-            "kind": "news",
-        })
+        params = urllib.parse.urlencode(
+            {
+                "auth_token": self._token,
+                "currencies": currency,
+                "public": "true",
+                "kind": "news",
+            }
+        )
         url = f"{self.BASE}?{params}"
         try:
-            req = urllib.request.Request(
-                url, headers={"User-Agent": "kai-freqtrade/1.0"}
-            )
+            req = urllib.request.Request(url, headers={"User-Agent": "kai-freqtrade/1.0"})
             with urllib.request.urlopen(req, timeout=8) as resp:
                 payload = json.loads(resp.read().decode("utf-8"))
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
@@ -96,14 +96,16 @@ class _CryptoPanicProvider:
         for r in (payload.get("results") or [])[:limit]:
             votes = r.get("votes") or {}
             src = r.get("source") or {}
-            items.append(NewsItem(
-                title=str(r.get("title", ""))[:200],
-                source=str(src.get("title") or src.get("domain") or ""),
-                published_at=str(r.get("published_at", "")),
-                url=str(r.get("url") or r.get("original_url") or ""),
-                votes_positive=int(votes.get("positive", 0) or 0),
-                votes_negative=int(votes.get("negative", 0) or 0),
-            ))
+            items.append(
+                NewsItem(
+                    title=str(r.get("title", ""))[:200],
+                    source=str(src.get("title") or src.get("domain") or ""),
+                    published_at=str(r.get("published_at", "")),
+                    url=str(r.get("url") or r.get("original_url") or ""),
+                    votes_positive=int(votes.get("positive", 0) or 0),
+                    votes_negative=int(votes.get("negative", 0) or 0),
+                )
+            )
         return items
 
 
@@ -137,7 +139,7 @@ def fetch_recent_news(pair: str, limit: int = 5) -> list[NewsItem]:
     cache_file = _cache_path(pair, provider_name)
     if cache_file.exists():
         try:
-            with open(cache_file, "r") as f:
+            with open(cache_file) as f:
                 data = json.load(f)
             age = time.time() - float(data.get("timestamp", 0))
             if age < NEWS_CACHE_TTL:
@@ -154,12 +156,15 @@ def fetch_recent_news(pair: str, limit: int = 5) -> list[NewsItem]:
 
     try:
         with open(cache_file, "w") as f:
-            json.dump({
-                "pair": pair,
-                "provider": provider_name,
-                "timestamp": time.time(),
-                "items": [asdict(i) for i in items],
-            }, f)
+            json.dump(
+                {
+                    "pair": pair,
+                    "provider": provider_name,
+                    "timestamp": time.time(),
+                    "items": [asdict(i) for i in items],
+                },
+                f,
+            )
     except Exception as e:
         logger.warning(f"[news] cache write failed for {pair}: {e}")
 

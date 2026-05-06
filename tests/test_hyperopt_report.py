@@ -33,15 +33,26 @@ def _write_jsonl(path: Path, epochs):
 
 def _run(results: Path, out: Path, bp: Path, **extras):
     return subprocess.run(
-        [sys.executable, str(SCRIPT),
-         "--results", str(results),
-         "--output", str(out),
-         "--best-params", str(bp),
-         "--strategy", extras.get("strategy", "KaiBaseStrategy"),
-         "--epochs", extras.get("epochs", "100"),
-         "--loss", extras.get("loss", "SharpeHyperOptLoss"),
-         "--timerange", extras.get("timerange", "20260207-20260507")],
-        capture_output=True, text=True,
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--results",
+            str(results),
+            "--output",
+            str(out),
+            "--best-params",
+            str(bp),
+            "--strategy",
+            extras.get("strategy", "KaiBaseStrategy"),
+            "--epochs",
+            extras.get("epochs", "100"),
+            "--loss",
+            extras.get("loss", "SharpeHyperOptLoss"),
+            "--timerange",
+            extras.get("timerange", "20260207-20260507"),
+        ],
+        capture_output=True,
+        text=True,
     )
 
 
@@ -49,19 +60,21 @@ def test_parse_fthypt_loads_module(tmp_path):
     """parse_fthypt를 모듈로 import하여 단위 검증."""
     sys.path.insert(0, str(ROOT / "scripts"))
     import importlib
+
     if "hyperopt_report" in sys.modules:
         importlib.reload(sys.modules["hyperopt_report"])
     import hyperopt_report
+
     p = tmp_path / "r.fthypt"
     p.write_text(
-        '\n'.join([
-            json.dumps(_epoch(-0.5, 0.1, 1.2, 0.05, 100,
-                              {"buy_threshold": 0.005}, 1)),
-            "",
-            "{not valid json",
-            json.dumps(_epoch(-0.7, 0.2, 1.5, 0.04, 120,
-                              {"buy_threshold": 0.008}, 2)),
-        ])
+        "\n".join(
+            [
+                json.dumps(_epoch(-0.5, 0.1, 1.2, 0.05, 100, {"buy_threshold": 0.005}, 1)),
+                "",
+                "{not valid json",
+                json.dumps(_epoch(-0.7, 0.2, 1.5, 0.04, 120, {"buy_threshold": 0.008}, 2)),
+            ]
+        )
     )
     epochs = hyperopt_report.parse_fthypt(p)
     assert len(epochs) == 2  # 빈 줄과 잘못된 라인은 스킵
@@ -72,15 +85,33 @@ def test_parse_fthypt_loads_module(tmp_path):
 
 def test_full_run_produces_report_and_params(tmp_path):
     epochs = [
-        _epoch(-0.40, 0.12, 1.10, 0.06, 80,
-               {"buy_threshold": 0.004, "sell_threshold": -0.005,
-                "di_threshold_buy": 0.80}, 1),
-        _epoch(-0.65, 0.18, 1.42, 0.08, 130,
-               {"buy_threshold": 0.008, "sell_threshold": -0.007,
-                "di_threshold_buy": 0.85}, 2),
-        _epoch(-0.50, 0.15, 1.25, 0.07, 110,
-               {"buy_threshold": 0.006, "sell_threshold": -0.006,
-                "di_threshold_buy": 0.82}, 3),
+        _epoch(
+            -0.40,
+            0.12,
+            1.10,
+            0.06,
+            80,
+            {"buy_threshold": 0.004, "sell_threshold": -0.005, "di_threshold_buy": 0.80},
+            1,
+        ),
+        _epoch(
+            -0.65,
+            0.18,
+            1.42,
+            0.08,
+            130,
+            {"buy_threshold": 0.008, "sell_threshold": -0.007, "di_threshold_buy": 0.85},
+            2,
+        ),
+        _epoch(
+            -0.50,
+            0.15,
+            1.25,
+            0.07,
+            110,
+            {"buy_threshold": 0.006, "sell_threshold": -0.006, "di_threshold_buy": 0.82},
+            3,
+        ),
     ]
     rp = tmp_path / "results.fthypt"
     _write_jsonl(rp, epochs)
@@ -124,8 +155,7 @@ def test_only_invalid_lines_returns_2(tmp_path):
 
 
 def test_top5_truncates_to_5(tmp_path):
-    epochs = [_epoch(-0.1 - i * 0.01, 0.1, 1.0, 0.05, 100,
-                     {"x": i}, i) for i in range(20)]
+    epochs = [_epoch(-0.1 - i * 0.01, 0.1, 1.0, 0.05, 100, {"x": i}, i) for i in range(20)]
     rp = tmp_path / "results.fthypt"
     _write_jsonl(rp, epochs)
     out = tmp_path / "REPORT.md"
@@ -135,7 +165,10 @@ def test_top5_truncates_to_5(tmp_path):
     md = out.read_text()
     # Top 5 표 → 정확히 5행만 (헤더 + 구분선 + 5)
     top5_section = md.split("## Top 5 Epochs")[1].split("##")[0]
-    rows = [ln for ln in top5_section.splitlines()
-            if ln.startswith("|") and not ln.startswith("|---") and "|---:" not in ln]
+    rows = [
+        ln
+        for ln in top5_section.splitlines()
+        if ln.startswith("|") and not ln.startswith("|---") and "|---:" not in ln
+    ]
     # 헤더 + 5 데이터행
     assert len(rows) == 6

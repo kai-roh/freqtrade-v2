@@ -12,15 +12,10 @@ KaiBaseStrategy - Freqtrade + FreqAI + Claude 기반 USDT-M Futures 전략
 
 import logging
 import time
-from functools import reduce
-from typing import Optional
 
-import numpy as np
-import pandas as pd
 import talib.abstract as ta
+from freqtrade.strategy import DecimalParameter, IntParameter, IStrategy
 from pandas import DataFrame
-
-from freqtrade.strategy import IStrategy, IntParameter, DecimalParameter, merge_informative_pair
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +48,11 @@ class KaiBaseStrategy(IStrategy):
 
     # === ROI (시간 경과별 익절) ===
     minimal_roi = {
-        "0": 0.025,    # 즉시 +2.5%면 익절
-        "30": 0.015,   # 30분 후 +1.5%
-        "60": 0.008,   # 60분 후 +0.8%
+        "0": 0.025,  # 즉시 +2.5%면 익절
+        "30": 0.015,  # 30분 후 +1.5%
+        "60": 0.008,  # 60분 후 +0.8%
         "120": 0.003,  # 120분 후 +0.3%
-        "180": 0       # 180분 후 본전이면 청산
+        "180": 0,  # 180분 후 본전이면 청산
     }
 
     # === 레버리지 ===
@@ -89,9 +84,17 @@ class KaiBaseStrategy(IStrategy):
         },
     }
 
-    def leverage(self, pair: str, current_time, current_rate: float,
-                 proposed_leverage: float, max_leverage: float,
-                 entry_tag: Optional[str], side: str, **kwargs) -> float:
+    def leverage(
+        self,
+        pair: str,
+        current_time,
+        current_rate: float,
+        proposed_leverage: float,
+        max_leverage: float,
+        entry_tag: str | None,
+        side: str,
+        **kwargs,
+    ) -> float:
         """모든 페어 동일 레버리지 적용"""
         return self.leverage_value
 
@@ -122,7 +125,9 @@ class KaiBaseStrategy(IStrategy):
                 # (가드 자체는 funding_blackout으로 보강됨)
                 if cached is None:
                     self._funding_cache[pair] = {
-                        "rate": 0.0, "next_ts_ms": 0, "fetched_at": now,
+                        "rate": 0.0,
+                        "next_ts_ms": 0,
+                        "fetched_at": now,
                     }
                 continue
             self._funding_cache[pair] = {
@@ -161,8 +166,9 @@ class KaiBaseStrategy(IStrategy):
     # ============================================================
     # FreqAI Feature Engineering
     # ============================================================
-    def feature_engineering_expand_all(self, dataframe: DataFrame, period: int,
-                                       metadata: dict, **kwargs) -> DataFrame:
+    def feature_engineering_expand_all(
+        self, dataframe: DataFrame, period: int, metadata: dict, **kwargs
+    ) -> DataFrame:
         """
         FreqAI가 모든 timeframe / corr_pair 조합에 자동 적용하는 피처
         period는 config의 indicator_periods_candles에서 자동 주입
@@ -178,11 +184,9 @@ class KaiBaseStrategy(IStrategy):
         dataframe[f"%-bb_middleband-period_{period}"] = bollinger["middleband"]
         dataframe[f"%-bb_upperband-period_{period}"] = bollinger["upperband"]
         dataframe[f"%-bb_width-period_{period}"] = (
-            (bollinger["upperband"] - bollinger["lowerband"]) / bollinger["middleband"]
-        )
-        dataframe[f"%-close-bb_lower-period_{period}"] = (
-            dataframe["close"] / bollinger["lowerband"]
-        )
+            bollinger["upperband"] - bollinger["lowerband"]
+        ) / bollinger["middleband"]
+        dataframe[f"%-close-bb_lower-period_{period}"] = dataframe["close"] / bollinger["lowerband"]
 
         dataframe[f"%-roc-period_{period}"] = ta.ROC(dataframe, timeperiod=period)
 
@@ -191,16 +195,18 @@ class KaiBaseStrategy(IStrategy):
         )
         return dataframe
 
-    def feature_engineering_expand_basic(self, dataframe: DataFrame, metadata: dict,
-                                         **kwargs) -> DataFrame:
+    def feature_engineering_expand_basic(
+        self, dataframe: DataFrame, metadata: dict, **kwargs
+    ) -> DataFrame:
         """period 무관 피처"""
         dataframe["%-pct-change"] = dataframe["close"].pct_change()
         dataframe["%-raw_volume"] = dataframe["volume"]
         dataframe["%-raw_price"] = dataframe["close"]
         return dataframe
 
-    def feature_engineering_standard(self, dataframe: DataFrame, metadata: dict,
-                                     **kwargs) -> DataFrame:
+    def feature_engineering_standard(
+        self, dataframe: DataFrame, metadata: dict, **kwargs
+    ) -> DataFrame:
         """주 timeframe에서만 한 번 추가"""
         dataframe["%-day_of_week"] = dataframe["date"].dt.dayofweek
         dataframe["%-hour_of_day"] = dataframe["date"].dt.hour
@@ -210,6 +216,7 @@ class KaiBaseStrategy(IStrategy):
         # 여기서는 캐시된 값을 읽기만 함
         try:
             from user_data.llm.claude_client import get_cached_sentiment
+
             pair = metadata.get("pair", "")
             sentiment = get_cached_sentiment(pair)
             dataframe["%-llm_sentiment"] = sentiment
@@ -266,31 +273,31 @@ class KaiBaseStrategy(IStrategy):
         # 공통 가드: FreqAI 신뢰도 + 펀딩 비율 절대값 + 펀딩 직전 차단
         blackout_min = float(self.funding_blackout_minutes.value)
         guard_long = (
-            (dataframe["do_predict"] == 1) &
-            (dataframe["DI_values"] < self.di_threshold_buy.value) &
-            (dataframe["funding_rate"].abs() < self.funding_max.value) &
-            (dataframe["funding_minutes_to_next"] > blackout_min) &
-            (dataframe["volume"] > 0)
+            (dataframe["do_predict"] == 1)
+            & (dataframe["DI_values"] < self.di_threshold_buy.value)
+            & (dataframe["funding_rate"].abs() < self.funding_max.value)
+            & (dataframe["funding_minutes_to_next"] > blackout_min)
+            & (dataframe["volume"] > 0)
         )
 
         # 롱 진입: 예측값 > 임계 + EMA 정배열 + RSI 과매도 회복
         dataframe.loc[
-            guard_long &
-            (dataframe["&-s_close"] > self.buy_threshold.value) &
-            (dataframe["ema_20"] > dataframe["ema_50"]) &
-            (dataframe["rsi"] > 30) &
-            (dataframe["rsi"] < 70),
-            ["enter_long", "enter_tag"]
+            guard_long
+            & (dataframe["&-s_close"] > self.buy_threshold.value)
+            & (dataframe["ema_20"] > dataframe["ema_50"])
+            & (dataframe["rsi"] > 30)
+            & (dataframe["rsi"] < 70),
+            ["enter_long", "enter_tag"],
         ] = (1, "freqai_long")
 
         # 숏 진입: 예측값 < 임계 + EMA 역배열 + RSI 과매수 회복
         dataframe.loc[
-            guard_long &
-            (dataframe["&-s_close"] < self.sell_threshold.value) &
-            (dataframe["ema_20"] < dataframe["ema_50"]) &
-            (dataframe["rsi"] < 70) &
-            (dataframe["rsi"] > 30),
-            ["enter_short", "enter_tag"]
+            guard_long
+            & (dataframe["&-s_close"] < self.sell_threshold.value)
+            & (dataframe["ema_20"] < dataframe["ema_50"])
+            & (dataframe["rsi"] < 70)
+            & (dataframe["rsi"] > 30),
+            ["enter_short", "enter_tag"],
         ] = (1, "freqai_short")
 
         return dataframe
@@ -301,20 +308,14 @@ class KaiBaseStrategy(IStrategy):
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         # 롱 청산: 예측 반전 또는 RSI 과매수
         dataframe.loc[
-            (
-                (dataframe["&-s_close"] < 0) |
-                (dataframe["rsi"] > 78)
-            ) & (dataframe["volume"] > 0),
-            ["exit_long", "exit_tag"]
+            ((dataframe["&-s_close"] < 0) | (dataframe["rsi"] > 78)) & (dataframe["volume"] > 0),
+            ["exit_long", "exit_tag"],
         ] = (1, "freqai_exit_long")
 
         # 숏 청산: 예측 반전 또는 RSI 과매도
         dataframe.loc[
-            (
-                (dataframe["&-s_close"] > 0) |
-                (dataframe["rsi"] < 22)
-            ) & (dataframe["volume"] > 0),
-            ["exit_short", "exit_tag"]
+            ((dataframe["&-s_close"] > 0) | (dataframe["rsi"] < 22)) & (dataframe["volume"] > 0),
+            ["exit_short", "exit_tag"],
         ] = (1, "freqai_exit_short")
 
         return dataframe
@@ -322,9 +323,16 @@ class KaiBaseStrategy(IStrategy):
     # ============================================================
     # 커스텀 진입 가격 (메이커 우선)
     # ============================================================
-    def custom_entry_price(self, pair: str, trade, current_time,
-                           proposed_rate: float, entry_tag: Optional[str],
-                           side: str, **kwargs) -> float:
+    def custom_entry_price(
+        self,
+        pair: str,
+        trade,
+        current_time,
+        proposed_rate: float,
+        entry_tag: str | None,
+        side: str,
+        **kwargs,
+    ) -> float:
         """
         호가창 첫 단가에서 약간 양보해 메이커로 체결 유도
         """
@@ -344,8 +352,9 @@ class KaiBaseStrategy(IStrategy):
     # ============================================================
     # 커스텀 손절 (ATR 기반 동적 조정)
     # ============================================================
-    def custom_stoploss(self, pair: str, trade, current_time,
-                        current_rate: float, current_profit: float, **kwargs) -> float:
+    def custom_stoploss(
+        self, pair: str, trade, current_time, current_rate: float, current_profit: float, **kwargs
+    ) -> float:
         """
         +1% 이익 도달 시 본전 + 0.2%로 손절선 끌어올림
         """

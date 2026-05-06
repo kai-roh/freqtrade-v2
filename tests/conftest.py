@@ -31,6 +31,7 @@ def tracker(cache_dir, monkeypatch):
     monkeypatch.setenv("CLAUDE_MODEL", "claude-opus-4-7")
     monkeypatch.setenv("CLAUDE_MODEL_FALLBACK", "claude-haiku-4-5-20251001")
     from user_data.llm import cost_tracker
+
     importlib.reload(cost_tracker)
     return cost_tracker
 
@@ -40,6 +41,7 @@ def news(cache_dir, monkeypatch):
     monkeypatch.setenv("LLM_NEWS_PROVIDER", "none")
     monkeypatch.delenv("CRYPTOPANIC_TOKEN", raising=False)
     from user_data.llm import news_sources
+
     importlib.reload(news_sources)
     return news_sources
 
@@ -48,7 +50,8 @@ def news(cache_dir, monkeypatch):
 def claude(cache_dir, monkeypatch):
     monkeypatch.setenv("LLM_NEWS_PROVIDER", "none")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    from user_data.llm import cost_tracker, news_sources, claude_client
+    from user_data.llm import claude_client, cost_tracker, news_sources
+
     importlib.reload(cost_tracker)
     importlib.reload(news_sources)
     importlib.reload(claude_client)

@@ -20,15 +20,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 GATE_SHARPE_MIN = 1.0
 GATE_MDD_MAX = 0.15  # 15%
 
 
-def _coerce_float(x: Any) -> Optional[float]:
+def _coerce_float(x: Any) -> float | None:
     if x is None:
         return None
     try:
@@ -104,7 +104,10 @@ def main() -> int:
     sharpe = _pick(s, "sharpe", "sharpe_ratio")
     sortino = _pick(s, "sortino")
     mdd_account = _pick(
-        s, "max_drawdown_account", "max_drawdown_abs_pct", "max_drawdown",
+        s,
+        "max_drawdown_account",
+        "max_drawdown_abs_pct",
+        "max_drawdown",
         default=0.0,
     )
     wins = int(_coerce_float(_pick(s, "wins", default=0)) or 0)
@@ -126,13 +129,15 @@ def main() -> int:
     mdd_ok = mdd_f is not None and mdd_f <= GATE_MDD_MAX
     gate_ok = sharpe_ok and mdd_ok
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     lines: list[str] = []
     lines.append(f"# Backtest Report — {chosen_name}")
     lines.append("")
     lines.append(f"- **Generated**: {now}")
-    lines.append(f"- **Timerange**: {args.timerange}"
-                 + (f" ({int(backtest_days)} days)" if backtest_days else ""))
+    lines.append(
+        f"- **Timerange**: {args.timerange}"
+        + (f" ({int(backtest_days)} days)" if backtest_days else "")
+    )
     lines.append(f"- **Result file**: `{result_path}`")
     lines.append("")
     lines.append("## Headline Metrics")
@@ -140,12 +145,9 @@ def main() -> int:
     lines.append("| Metric | Value |")
     lines.append("|---|---|")
     lines.append(f"| Total trades | {_i(total_trades)} |")
+    lines.append(f"| Win rate | {_pct(win_rate)} ({wins}W / {losses}L / {draws}D) |")
     lines.append(
-        f"| Win rate | {_pct(win_rate)} ({wins}W / {losses}L / {draws}D) |"
-    )
-    lines.append(
-        f"| Total profit | {_pct(profit_total_ratio)} "
-        f"({_f(profit_total_abs, 2)} {{stake}}) |"
+        f"| Total profit | {_pct(profit_total_ratio)} " f"({_f(profit_total_abs, 2)} {{stake}}) |"
     )
     lines.append(f"| Avg profit per trade | {_pct(avg_profit)} |")
     lines.append(f"| Max drawdown | {_pct(mdd_account)} |")
@@ -160,8 +162,7 @@ def main() -> int:
     lines.append("## Live-Gate Decision")
     lines.append("")
     lines.append(
-        f"- Sharpe ≥ {GATE_SHARPE_MIN}: "
-        f"{'PASS' if sharpe_ok else 'FAIL'} (got {_f(sharpe, 3)})"
+        f"- Sharpe ≥ {GATE_SHARPE_MIN}: " f"{'PASS' if sharpe_ok else 'FAIL'} (got {_f(sharpe, 3)})"
     )
     lines.append(
         f"- MDD ≤ {GATE_MDD_MAX*100:.0f}%: "
@@ -183,14 +184,14 @@ def main() -> int:
             trades = _pick(r, "trades", default=0)
             ppct = _pick(r, "profit_total_pct", "profit_total")
             # results_per_pair는 freqtrade가 percent 단위(0~100)로 주는 케이스가 많음
-            scale = "percent" if (
-                _coerce_float(ppct) is not None and abs(_coerce_float(ppct) or 0) > 1.0
-            ) else "ratio"
+            scale = (
+                "percent"
+                if (_coerce_float(ppct) is not None and abs(_coerce_float(ppct) or 0) > 1.0)
+                else "ratio"
+            )
             pabs = _pick(r, "profit_total_abs", default=0)
             dur = _pick(r, "duration_avg", default="—")
-            lines.append(
-                f"| {pair} | {_i(trades)} | {_pct(ppct, scale)} | {_f(pabs, 2)} | {dur} |"
-            )
+            lines.append(f"| {pair} | {_i(trades)} | {_pct(ppct, scale)} | {_f(pabs, 2)} | {dur} |")
         lines.append("")
 
     if enter_tag:
@@ -202,9 +203,11 @@ def main() -> int:
             tag = _pick(r, "key", "enter_tag", default="—")
             trades = _pick(r, "trades", default=0)
             ppct = _pick(r, "profit_total_pct", "profit_total")
-            scale = "percent" if (
-                _coerce_float(ppct) is not None and abs(_coerce_float(ppct) or 0) > 1.0
-            ) else "ratio"
+            scale = (
+                "percent"
+                if (_coerce_float(ppct) is not None and abs(_coerce_float(ppct) or 0) > 1.0)
+                else "ratio"
+            )
             lines.append(f"| {tag} | {_i(trades)} | {_pct(ppct, scale)} |")
         lines.append("")
 
@@ -217,9 +220,11 @@ def main() -> int:
             reason = _pick(r, "key", "exit_reason", default="—")
             trades = _pick(r, "trades", default=0)
             ppct = _pick(r, "profit_total_pct", "profit_total")
-            scale = "percent" if (
-                _coerce_float(ppct) is not None and abs(_coerce_float(ppct) or 0) > 1.0
-            ) else "ratio"
+            scale = (
+                "percent"
+                if (_coerce_float(ppct) is not None and abs(_coerce_float(ppct) or 0) > 1.0)
+                else "ratio"
+            )
             lines.append(f"| {reason} | {_i(trades)} | {_pct(ppct, scale)} |")
         lines.append("")
 

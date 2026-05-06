@@ -38,7 +38,7 @@ jobs:
         run: ./scripts/test.sh
 
   lint:
-    name: lint (py_compile + bash -n)
+    name: lint (ruff + black + bash -n)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,13 +47,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: requirements-dev.txt
 
-      - name: Python syntax check
+      - name: Install dev dependencies
         run: |
-          mapfile -t pyfiles < <(git ls-files '*.py')
-          if [ ${#pyfiles[@]} -gt 0 ]; then
-            python -m py_compile "${pyfiles[@]}"
-          fi
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: ruff lint
+        run: ruff check .
+
+      - name: black format check
+        run: black --check .
 
       - name: Shell syntax check
         run: |

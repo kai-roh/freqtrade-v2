@@ -15,8 +15,10 @@ def _load(monkeypatch, with_creds=True):
         monkeypatch.delenv("TELEGRAM_TOKEN", raising=False)
         monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
     import sys
+
     sys.modules.pop("telegram_notify", None)
     import telegram_notify
+
     importlib.reload(telegram_notify)
     return telegram_notify
 
@@ -70,8 +72,10 @@ def test_send_success(monkeypatch):
 
 def test_send_api_not_ok(monkeypatch):
     tn = _load(monkeypatch)
-    monkeypatch.setattr("urllib.request.urlopen",
-                        lambda r, timeout=None: _FakeResp(json.dumps({"ok": False, "description": "x"})))
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda r, timeout=None: _FakeResp(json.dumps({"ok": False, "description": "x"})),
+    )
     assert tn.send("x") is False
 
 

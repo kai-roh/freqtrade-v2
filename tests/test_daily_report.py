@@ -11,6 +11,7 @@ def _load_dr(monkeypatch, cache_dir):
     if "daily_report" in sys.modules:
         del sys.modules["daily_report"]
     import daily_report
+
     importlib.reload(daily_report)
     return daily_report
 
@@ -25,9 +26,14 @@ def test_build_report_no_data_no_alerts(monkeypatch, tmp_path):
 
 def test_alert_on_daily_loss(monkeypatch, tmp_path):
     dr = _load_dr(monkeypatch, tmp_path)
-    profit = {"profit_today": -0.07, "profit_today_abs": -70.0,
-              "profit_all": 0.0, "profit_all_abs": 0.0,
-              "closed_trade_count": 5, "latest_trade_date": "2026-05-07"}
+    profit = {
+        "profit_today": -0.07,
+        "profit_today_abs": -70.0,
+        "profit_all": 0.0,
+        "profit_all_abs": 0.0,
+        "closed_trade_count": 5,
+        "latest_trade_date": "2026-05-07",
+    }
     md, alerts = dr._build_report(profit, [], None, None, None, None)
     assert any("Daily loss" in a for a in alerts)
     assert "## ⚠ Alerts" in md
@@ -43,11 +49,12 @@ def test_no_alert_when_loss_within_threshold(monkeypatch, tmp_path):
 def test_fee_recon_tolerance_exceeded_triggers_alert(monkeypatch, tmp_path):
     dr = _load_dr(monkeypatch, tmp_path)
     fee = {
-        "lookback_days": 7, "tolerance_pct": 5.0,
-        "local": {"trades": 10, "fee_usd": 5.0, "effective_rate_pct": 0.06,
-                  "notional_usd": 8000.0},
+        "lookback_days": 7,
+        "tolerance_pct": 5.0,
+        "local": {"trades": 10, "fee_usd": 5.0, "effective_rate_pct": 0.06, "notional_usd": 8000.0},
         "real": {"trades": 12, "fee_usd": 8.0, "effective_rate_pct": 0.10},
-        "diff_pct": 60.0, "recommended_fee": 0.0015,
+        "diff_pct": 60.0,
+        "recommended_fee": 0.0015,
         "status": "tolerance_exceeded",
     }
     md, alerts = dr._build_report(None, [], None, None, fee, None)
@@ -58,16 +65,20 @@ def test_fee_recon_tolerance_exceeded_triggers_alert(monkeypatch, tmp_path):
 def test_claude_hard_cap_alert(monkeypatch, tmp_path):
     dr = _load_dr(monkeypatch, tmp_path)
     monkeypatch.setenv("CLAUDE_DAILY_COST_HARD_STOP", "10.0")
-    cost = {"cost_usd": 12.5, "calls": 50,
-            "input_tokens": 100_000, "output_tokens": 5_000, "by_model": {}}
+    cost = {
+        "cost_usd": 12.5,
+        "calls": 50,
+        "input_tokens": 100_000,
+        "output_tokens": 5_000,
+        "by_model": {},
+    }
     _, alerts = dr._build_report(None, [], None, None, None, cost)
     assert any("HARD CAP" in a for a in alerts)
 
 
 def test_claude_under_caps_no_alert(monkeypatch, tmp_path):
     dr = _load_dr(monkeypatch, tmp_path)
-    cost = {"cost_usd": 1.5, "calls": 5, "input_tokens": 1000,
-            "output_tokens": 100, "by_model": {}}
+    cost = {"cost_usd": 1.5, "calls": 5, "input_tokens": 1000, "output_tokens": 100, "by_model": {}}
     _, alerts = dr._build_report(None, [], None, None, None, cost)
     assert alerts == []
 
@@ -75,10 +86,22 @@ def test_claude_under_caps_no_alert(monkeypatch, tmp_path):
 def test_open_trades_table_renders(monkeypatch, tmp_path):
     dr = _load_dr(monkeypatch, tmp_path)
     status = [
-        {"pair": "BTC/USDT:USDT", "is_short": False, "open_rate": 60000.0,
-         "current_rate": 60500.0, "profit_ratio": 0.008, "stake_amount": 50.0},
-        {"pair": "ETH/USDT:USDT", "is_short": True, "open_rate": 3000.0,
-         "current_rate": 2980.0, "profit_ratio": 0.007, "stake_amount": 50.0},
+        {
+            "pair": "BTC/USDT:USDT",
+            "is_short": False,
+            "open_rate": 60000.0,
+            "current_rate": 60500.0,
+            "profit_ratio": 0.008,
+            "stake_amount": 50.0,
+        },
+        {
+            "pair": "ETH/USDT:USDT",
+            "is_short": True,
+            "open_rate": 3000.0,
+            "current_rate": 2980.0,
+            "profit_ratio": 0.007,
+            "stake_amount": 50.0,
+        },
     ]
     md, _ = dr._build_report(None, status, None, None, None, None)
     assert "BTC/USDT:USDT" in md and "ETH/USDT:USDT" in md

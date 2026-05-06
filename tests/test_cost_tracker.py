@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 
 def test_calc_cost_opus(tracker):
@@ -70,15 +70,19 @@ def test_record_usage_per_model_breakdown(tracker):
 
 def test_state_resets_on_new_utc_day(tracker):
     """다른 날짜의 state는 무시되고 새로 시작."""
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
-    tracker.STATE_FILE.write_text(json.dumps({
-        "date": yesterday,
-        "input_tokens": 999_999,
-        "output_tokens": 999_999,
-        "cost_usd": 999.0,
-        "calls": 999,
-        "by_model": {},
-    }))
+    yesterday = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+    tracker.STATE_FILE.write_text(
+        json.dumps(
+            {
+                "date": yesterday,
+                "input_tokens": 999_999,
+                "output_tokens": 999_999,
+                "cost_usd": 999.0,
+                "calls": 999,
+                "by_model": {},
+            }
+        )
+    )
     fresh = tracker.get_state()
     assert fresh["date"] != yesterday
     assert fresh["cost_usd"] == 0.0
