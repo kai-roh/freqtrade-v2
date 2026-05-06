@@ -22,10 +22,14 @@ from user_data.llm import cost_tracker
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = Path("/freqtrade/user_data/llm/cache")
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_DIR = Path(os.getenv("LLM_CACHE_BASE_DIR", "/freqtrade/user_data/llm/cache"))
 FAILURE_DIR = CACHE_DIR / "_failures"
-FAILURE_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    FAILURE_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    # 컨테이너 외부 import 보호 — 실제 쓰기 단계에서 또 실패해도 fail-soft.
+    pass
 
 CACHE_TTL_SECONDS = int(os.getenv("CLAUDE_CACHE_TTL_SECONDS", "1800"))  # 30분
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -178,14 +182,31 @@ def get_cached_sentiment(pair: str) -> float:
 
 def _fetch_sentiment(pair: str) -> float:
     """
-    Claude API 호출.
-    실제 운영 시 뉴스/SNS 본문을 user 프롬프트에 함께 전달해야 함 (Phase A-2 작업).
-    여기서는 골격만 제공 + JSON 강제.
+    Claude API 호출. 페어별 최근 뉴스 헤드라인을 user 프롬프트에 주입.
+    뉴스 0건이면 LLM에게 confidence를 낮추도록 명시 (안전 폴백).
     """
+    try:
+        from user_data.llm.news_sources import fetch_recent_news, format_for_prompt
+        items = fetch_recent_news(pair, limit=5)
+    except Exception as e:
+        logger.warning(f"[Claude] news fetch failed for {pair}: {e}")
+        items = []
+        try:
+            from user_data.llm.news_sources import format_for_prompt
+        except Exception:
+            def format_for_prompt(_items, max_items=5):  # type: ignore
+                return "(no recent news available)"
+
+    news_block = format_for_prompt(items)
+    if items:
+        logger.info(f"[Claude] {pair} news context: {len(items)} headlines")
+
     user = (
         f"Asset: {pair}\n"
-        "Task: estimate short-term (next ~1h) crypto market sentiment for this asset "
-        "based on general market context you know about. "
+        f"Recent news headlines (most recent first):\n{news_block}\n\n"
+        "Task: estimate short-term (next ~1h) crypto market sentiment for this asset, "
+        "weighted toward the headlines above. "
+        "If headlines are absent, irrelevant, or stale, output confidence <= 0.3. "
         "Return a single JSON per the schema."
     )
     result = _call_claude(_SENTIMENT_SYSTEM, user, max_tokens=200)

@@ -26,8 +26,11 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-STATE_DIR = Path("/freqtrade/user_data/llm/cache")
-STATE_DIR.mkdir(parents=True, exist_ok=True)
+STATE_DIR = Path(os.getenv("LLM_CACHE_BASE_DIR", "/freqtrade/user_data/llm/cache"))
+try:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 STATE_FILE = STATE_DIR / "_cost_state.json"
 
 # $/MTok (input, output)
