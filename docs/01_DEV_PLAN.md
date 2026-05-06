@@ -144,10 +144,22 @@
 
 ### Phase C. 운영 가시성 (3주차)
 
-#### C-1. Telegram 알림 통합 (선택)
-**작업**:
-1. config.json `telegram.enabled: true` 토글 + `.env`에 토큰 채우기 가이드 강화
-2. 알림 화이트리스트: 진입/청산/일일PnL/긴급정지만 (시그널 알림은 끔)
+#### C-1. Telegram 알림 통합 ✅
+**완료 (2026-05-07)**:
+1. ✅ `scripts/telegram_notify.py` — Bot API 헬퍼 (urllib만, 4096자 자동 분할, fail-soft, CLI/library 양 모드)
+2. ✅ `daily_report.py --telegram` / `--telegram-always` — 알림 발생 시 (또는 always) 푸시. 알림 없으면 silent push, 있으면 sound on
+3. ✅ `config.json` telegram 섹션 보강: `notification_settings` 화이트리스트(진입/청산/protection/startup만 ON, 취소·캔들·strategy_msg OFF)
+4. ✅ `enabled: false` 유지 — placeholder 토큰으로 켜면 봇 자체가 안 뜨므로, 실제 토큰 검증 후 사용자가 수동 토글
+5. ✅ 단위 테스트 13개 추가 (74/74 PASS)
+
+**사용 예**:
+```bash
+# 알림 발생 시만 푸시 (cron 권장)
+./scripts/control.sh daily_report -- --telegram
+
+# 매일 결과 + 정상 시 silent 푸시
+./scripts/control.sh daily_report -- --telegram-always
+```
 
 #### C-2. 메트릭 노출 (옵션)
 **작업**:

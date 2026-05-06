@@ -42,6 +42,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from fee_reconciliation import compute_reconciliation  # noqa: E402
 
+try:
+    import telegram_notify  # type: ignore
+except Exception:
+    telegram_notify = None  # type: ignore
+
 # cost_tracker는 user_data/llm 경로에 있고, 컨테이너 안에서 절대경로로 접근 가능
 try:
     from user_data.llm import cost_tracker  # type: ignore
@@ -232,6 +237,34 @@ def _build_report(profit, status, balance, daily, fee_recon, cost_state) -> tupl
     return "\n".join(L), alerts
 
 
+def _telegram_message(profit, alerts: list[str]) -> str:
+    """Telegram 푸시용 짧은 요약 메시지."""
+    lines: list[str] = []
+    if alerts:
+        lines.append("*🚨 Freqtrade Alerts*")
+        for a in alerts:
+            # markdown 충돌 회피: '_*[]()' 등 특수문자를 단순 백틱으로 감쌈
+            lines.append(f"• {a}")
+    else:
+        lines.append("*✅ Freqtrade Daily — clean*")
+
+    if profit:
+        ratio = profit.get("profit_today")
+        absv = profit.get("profit_today_abs")
+        try:
+            today_pct = float(ratio) * 100
+            lines.append("")
+            lines.append(f"Today P/L: `{today_pct:+.2f}%` ({absv})")
+        except (TypeError, ValueError):
+            pass
+        try:
+            cum_pct = float(profit.get("profit_all", 0)) * 100
+            lines.append(f"Cumulative: `{cum_pct:+.2f}%`")
+        except (TypeError, ValueError):
+            pass
+    return "\n".join(lines)
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--days", type=int, default=7,
@@ -240,6 +273,10 @@ def main() -> int:
                    help="skip writing to user_data/daily_reports/")
     p.add_argument("--out-dir", default="/freqtrade/user_data/daily_reports",
                    help="report output directory")
+    p.add_argument("--telegram", action="store_true",
+                   help="push alerts to Telegram (TELEGRAM_TOKEN/CHAT_ID required)")
+    p.add_argument("--telegram-always", action="store_true",
+                   help="push to Telegram even when no alerts (implies --telegram)")
     args = p.parse_args()
 
     profit = _api_get("/profit")
@@ -270,6 +307,22 @@ def main() -> int:
             print(f"\nReport written: {out_path}", file=sys.stderr)
         except Exception as e:
             print(f"[warn] write failed: {e}", file=sys.stderr)
+
+    # Telegram push
+    want_push = args.telegram or args.telegram_always
+    if want_push:
+        if telegram_notify is None:
+            print("[warn] telegram_notify unavailable", file=sys.stderr)
+        elif not telegram_notify.is_configured():
+            print("[warn] TELEGRAM_TOKEN/CHAT_ID not set, skipping push", file=sys.stderr)
+        elif alerts or args.telegram_always:
+            tg_text = _telegram_message(profit, alerts)
+            ok = telegram_notify.send(tg_text, parse_mode="Markdown",
+                                      disable_notification=not bool(alerts))
+            print(f"[telegram] sent: {ok}", file=sys.stderr)
+        else:
+            print("[telegram] no alerts, skipping push (use --telegram-always to override)",
+                  file=sys.stderr)
 
     if not api_alive:
         return 2

@@ -91,3 +91,28 @@ def test_pct_helper_ratio_vs_percent(monkeypatch, tmp_path):
     assert dr._pct(5.0, scale="percent") == "+5.00%"
     assert dr._pct(None) == "—"
     assert dr._pct("not-a-number") == "—"
+
+
+def test_telegram_message_has_alerts(monkeypatch, tmp_path):
+    dr = _load_dr(monkeypatch, tmp_path)
+    profit = {"profit_today": -0.07, "profit_today_abs": -70.0, "profit_all": 0.05}
+    msg = dr._telegram_message(profit, ["Daily loss exceeded"])
+    assert "🚨" in msg
+    assert "Daily loss exceeded" in msg
+    assert "-7.00%" in msg
+    assert "+5.00%" in msg
+
+
+def test_telegram_message_clean_when_no_alerts(monkeypatch, tmp_path):
+    dr = _load_dr(monkeypatch, tmp_path)
+    msg = dr._telegram_message({"profit_today": 0.01}, [])
+    assert "✅" in msg
+    assert "🚨" not in msg
+
+
+def test_telegram_message_handles_missing_profit(monkeypatch, tmp_path):
+    dr = _load_dr(monkeypatch, tmp_path)
+    # API 미접속 — profit None
+    msg = dr._telegram_message(None, ["alert"])
+    assert "🚨" in msg
+    assert "alert" in msg

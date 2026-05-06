@@ -140,10 +140,28 @@
     }
   },
 
+  "_comment_telegram": "토큰 검증 후 enabled를 true로 토글. notification_settings는 노이즈 줄이려고 진입/청산/보호로직만 ON.",
   "telegram": {
     "enabled": false,
     "token": "${TELEGRAM_TOKEN}",
-    "chat_id": "${TELEGRAM_CHAT_ID}"
+    "chat_id": "${TELEGRAM_CHAT_ID}",
+    "notification_settings": {
+      "status": "on",
+      "warning": "on",
+      "startup": "on",
+      "entry": "on",
+      "entry_fill": "on",
+      "entry_cancel": "off",
+      "exit": "on",
+      "exit_fill": "on",
+      "exit_cancel": "off",
+      "protection_trigger": "on",
+      "protection_trigger_global": "on",
+      "show_candle": "off",
+      "strategy_msg": "off"
+    },
+    "balance_dust_level": 0.01,
+    "reload": false
   },
 
   "api_server": {
