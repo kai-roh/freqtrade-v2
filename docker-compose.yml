@@ -13,6 +13,15 @@ services:
       - .env
     environment:
       - TZ=Asia/Seoul
+      # Freqtrade는 config.json의 ${VAR}를 자동 치환하지 않음.
+      # FREQTRADE__SECTION__KEY 패턴으로 config 값을 override해야 함.
+      - FREQTRADE__API_SERVER__USERNAME=${FREQTRADE_USERNAME}
+      - FREQTRADE__API_SERVER__PASSWORD=${FREQTRADE_PASSWORD}
+      - FREQTRADE__API_SERVER__JWT_SECRET_KEY=${JWT_SECRET}
+      - FREQTRADE__EXCHANGE__KEY=${BINANCE_API_KEY}
+      - FREQTRADE__EXCHANGE__SECRET=${BINANCE_API_SECRET}
+      - FREQTRADE__TELEGRAM__TOKEN=${TELEGRAM_TOKEN}
+      - FREQTRADE__TELEGRAM__CHAT_ID=${TELEGRAM_CHAT_ID}
     command: >
       trade
       --logfile /freqtrade/user_data/logs/freqtrade.log
