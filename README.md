@@ -82,6 +82,10 @@ docker compose run --rm freqtrade python /freqtrade/scripts/fee_reconciliation.p
 pip install -r requirements-dev.txt
 ./scripts/test.sh
 
+# 운영 시작 전 환경 점검 (.env placeholder, 키 형식, docker, dry_run 등 11+ 체크)
+./scripts/preflight.sh
+./scripts/preflight.sh --init-jwt   # JWT_SECRET이 placeholder면 자동 생성
+
 # 백테스트 (자동화: 데이터 다운로드 + 백테스트 + 마크다운 리포트)
 ./scripts/run_backtest.sh --days 90
 # 결과: user_data/backtest_results/<UTC-ts>/REPORT.md
