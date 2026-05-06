@@ -87,6 +87,11 @@ pip install -r requirements-dev.txt
 # 결과: user_data/backtest_results/<UTC-ts>/REPORT.md
 # Live-Gate(Sharpe≥1.0, MDD≤15%) 판정 포함, exit code 0=PASS / 1=FAIL
 
+# 하이퍼옵트 (자동화: SharpeHyperOptLoss 100 epochs)
+./scripts/run_hyperopt.sh --epochs 200 --spaces "buy sell"
+# 결과: user_data/hyperopt_results/<UTC-ts>/{REPORT.md, best_params.json, results.fthypt}
+# 주의: 수십 분~수 시간 소요. 매주 1회 권장
+
 # 백테스트 (수동)
 docker compose run --rm freqtrade backtesting \
   --strategy KaiBaseStrategy \

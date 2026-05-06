@@ -120,11 +120,21 @@
 4. ✅ Live-Gate(Sharpe≥1.0 & MDD≤15%) 판정 → exit code 0=PASS / 1=FAIL
 5. ✅ macOS BSD `date` / Linux GNU `date` 모두 지원
 
-#### B-2. 하이퍼옵트 자동화 — `scripts/run_hyperopt.sh`
-**작업**:
-1. `buy_threshold`, `sell_threshold`, `di_threshold_buy` 파라미터 위주 hyperopt
-2. 결과 `user_data/hyperopt_results/<id>/best_params.json`
-3. 최상위 N개 set을 별도 walk-forward 검증
+#### B-2. 하이퍼옵트 자동화 — `scripts/run_hyperopt.sh` ✅
+**완료 (2026-05-07)**:
+1. ✅ `scripts/run_hyperopt.sh` — `download-data` + `hyperopt` + 결과 캡처(timestamp dir로 mv) + 리포트. 기본 `SharpeHyperOptLoss`, 100 epochs, random-state 42
+2. ✅ `scripts/hyperopt_report.py` — `.fthypt` (JSON Lines) 파싱 → loss 최소 epoch 식별, Top 5 표, `best_params.json` 추출
+3. ✅ Exit code: 0=ok, 2=결과 없음/입력 오류, 3=hyperopt 실패
+4. ✅ 단위 테스트 6개 추가 (80/80 PASS) — synthetic fthypt fixture
+5. ✅ CI 미실행 (수십 분~수 시간 소요) — 리포트 스크립트만 검증
+
+**적용 워크플로**:
+```bash
+./scripts/run_hyperopt.sh --epochs 200
+# → REPORT.md에서 best_params 확인
+# → strategy의 DecimalParameter default에 옮겨심기
+# → ./scripts/run_backtest.sh --skip-download 으로 walk-forward 검증
+```
 
 #### B-3. 데이터 워크플로 정리
 **작업**:
