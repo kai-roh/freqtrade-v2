@@ -13,6 +13,7 @@ user_data/hyperopt_results/
 user_data/data/
 user_data/notebooks/
 user_data/llm/cache/
+user_data/daily_reports/
 user_data/*.sqlite
 user_data/*.sqlite-journal
 user_data/tradesv3.dryrun.sqlite

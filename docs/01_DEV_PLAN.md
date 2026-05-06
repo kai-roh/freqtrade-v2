@@ -131,10 +131,14 @@
 1. `download-data`를 `cron`(macOS launchd) 또는 GitHub Actions로 매일 새벽 3시(KST) 실행
 2. 90일 롤링 윈도 유지(오래된 데이터 자동 prune)
 
-#### B-4. fee_reconciliation 자동 실행
-**작업**:
-1. `control.sh daily_report` 명령에 fee_reconciliation 결과 포함
-2. 5% 초과 시 stderr/exit code 1로 알림 가능하게
+#### B-4. fee_reconciliation 자동 실행 ✅
+**완료 (2026-05-07)**:
+1. ✅ `fee_reconciliation.py` 리팩터 — `compute_reconciliation()` import 가능, `--json` 출력 지원
+2. ✅ `scripts/daily_report.py` 신설 — Freqtrade API(`/profit`,`/status`,`/balance`,`/daily`) + fee 대사 + Claude 비용 누적 통합 마크다운
+3. ✅ 알림 임계: 일일 손실 5%↑ / fee 차이 5%↑ / Claude 하드캡 도달 → exit 1
+4. ✅ Freqtrade API 접속 실패 → exit 2 (봇 다운 시그널)
+5. ✅ `control.sh daily_report`를 새 스크립트로 위임 (`docker compose exec` 우선, 미실행 시 ephemeral run)
+6. ✅ 리포트 자동 저장: `user_data/daily_reports/YYYY-MM-DD.md`
 
 ---
 

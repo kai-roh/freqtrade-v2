@@ -82,11 +82,16 @@ case "$1" in
         ;;
 
     daily_report)
-        echo "=== Daily Report ==="
-        curl -s $AUTH "$API_BASE/daily?timescale=7" | jq '.' 2>/dev/null
-        echo ""
-        echo "=== Open Trades ==="
-        curl -s $AUTH "$API_BASE/status" | jq '.' 2>/dev/null
+        # 통합 리포트: PnL + 일별 breakdown + fee 대사 + Claude 비용 + 알림
+        # exit code: 0=clean / 1=alerts / 2=API down
+        if docker compose ps --status running freqtrade 2>/dev/null | grep -q freqtrade; then
+            docker compose exec -T freqtrade \
+                python /freqtrade/scripts/daily_report.py "${@:2}"
+        else
+            # 컨테이너가 떠있지 않으면 ephemeral run
+            docker compose run --rm -T freqtrade \
+                python /freqtrade/scripts/daily_report.py "${@:2}"
+        fi
         ;;
 
     *)
