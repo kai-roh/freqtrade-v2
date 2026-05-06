@@ -72,7 +72,12 @@ open http://localhost:8080
 # 일일 수수료 검증
 docker compose run --rm freqtrade python /freqtrade/scripts/fee_reconciliation.py
 
-# 백테스트
+# 백테스트 (자동화: 데이터 다운로드 + 백테스트 + 마크다운 리포트)
+./scripts/run_backtest.sh --days 90
+# 결과: user_data/backtest_results/<UTC-ts>/REPORT.md
+# Live-Gate(Sharpe≥1.0, MDD≤15%) 판정 포함, exit code 0=PASS / 1=FAIL
+
+# 백테스트 (수동)
 docker compose run --rm freqtrade backtesting \
   --strategy KaiBaseStrategy \
   --freqaimodel LLMEnhancedModel \

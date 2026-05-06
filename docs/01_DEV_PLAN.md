@@ -108,15 +108,17 @@
 
 ### Phase B. 자동화 & 검증 (2주차)
 
-#### B-1. 백테스트 자동화 — `scripts/run_backtest.sh`
+#### B-1. 백테스트 자동화 — `scripts/run_backtest.sh` ✅
 ```bash
 # 매주 일요일 1회 실행 권장
 ./scripts/run_backtest.sh --days 90 --pairs BTC/USDT:USDT,ETH/USDT:USDT,SOL/USDT:USDT
 ```
-**작업**:
-1. `download-data` + `backtesting` + `backtesting-analysis` 일괄 실행
-2. 결과를 `user_data/backtest_results/<timestamp>/`로 정리
-3. 주요 메트릭(승률·샤프·MDD·avg_profit)을 마크다운 리포트로 변환
+**완료 (2026-05-07)**:
+1. ✅ `download-data` + `backtesting` 일괄 실행 (skip-download 옵션 지원)
+2. ✅ 결과를 `user_data/backtest_results/<UTC-ts>/`로 정리 (`result.json`, `REPORT.md`)
+3. ✅ 헤드라인 메트릭 + 페어/태그/exit_reason 분석 마크다운
+4. ✅ Live-Gate(Sharpe≥1.0 & MDD≤15%) 판정 → exit code 0=PASS / 1=FAIL
+5. ✅ macOS BSD `date` / Linux GNU `date` 모두 지원
 
 #### B-2. 하이퍼옵트 자동화 — `scripts/run_hyperopt.sh`
 **작업**:
