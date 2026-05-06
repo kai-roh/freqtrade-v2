@@ -120,7 +120,7 @@ if [[ "$SKIP_DOWNLOAD" != "1" ]]; then
   docker compose run --rm freqtrade download-data \
     --exchange binance \
     --pairs $PAIRS_CLI \
-    --timeframes 5m 15m 1h \
+    --timeframes 5m 15m 1h 4h \
     --days "$DAYS" \
     --trading-mode futures
 else

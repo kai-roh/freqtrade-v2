@@ -197,10 +197,23 @@
 2. `KaiBaseStrategy.bot_loop_start` 또는 `confirm_trade_entry` 훅에서 `event_triggered_call` 호출
 3. 호출 빈도 상한: **시간당 N회**, 일일 비용 상한 환경변수로 제어
 
-#### D-3. 다중 시간프레임 결합
-**작업**:
-1. `informative_pairs()` 활성화 — 1h, 4h 추세 컨텍스트
-2. 5m 진입 시 1h 추세 일치 강제 (롱은 1h EMA 정배열일 때만)
+#### D-3. 다중 시간프레임 결합 ✅
+**완료 (2026-05-07)**:
+1. ✅ `KaiBaseStrategy.informative_pairs()` — 페어별 (pair, "1h"), (pair, "4h") 등록
+2. ✅ `_attach_higher_tf()` 헬퍼 — `merge_informative_pair`로 1h(`ema_20/50`+`trend_up`) 및 4h(`ema_50/200`+`trend_up`) 병합. fail-soft (데이터 부족·예외 시 그냥 skip)
+3. ✅ 진입 가드: `trend_filter_1h`(default 1, optimize=True) / `trend_filter_4h`(default 0, optimize=True). NaN/missing 컬럼은 `1`(추세 OK)로 폴백 → 백테스트 부드러움
+4. ✅ 롱은 `trend_up_1h==1`(+ 4h 토글 시 `trend_up_4h==1`), 숏은 `trend_up_1h==0`만 허용
+5. ✅ `run_backtest.sh` / `run_hyperopt.sh` / README의 `download-data` timeframes에 `4h` 추가
+6. ✅ ruff/black/pytest 80/80 그대로 통과
+
+**검증 방법**:
+```bash
+# 1h 가드 ON으로 백테스트
+./scripts/run_backtest.sh --days 90    # default trend_filter_1h=1
+# vs 1h 가드 OFF — Hyperopt가 자동으로 양 측 비교
+./scripts/run_hyperopt.sh --epochs 100 --spaces "buy sell"
+```
+hyperopt에서 `trend_filter_1h`가 켜진 경우와 꺼진 경우 중 어느 쪽이 더 좋은 loss를 내는지 자동 탐색 가능.
 
 #### D-4. 동적 페어 선정 (VolumePairList)
 **작업**:

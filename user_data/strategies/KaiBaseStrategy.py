@@ -13,8 +13,14 @@ KaiBaseStrategy - Freqtrade + FreqAI + Claude 기반 USDT-M Futures 전략
 import logging
 import time
 
+import pandas as pd
 import talib.abstract as ta
-from freqtrade.strategy import DecimalParameter, IntParameter, IStrategy
+from freqtrade.strategy import (
+    DecimalParameter,
+    IntParameter,
+    IStrategy,
+    merge_informative_pair,
+)
 from pandas import DataFrame
 
 logger = logging.getLogger(__name__)
@@ -65,6 +71,9 @@ class KaiBaseStrategy(IStrategy):
     funding_max = DecimalParameter(0.0005, 0.002, default=0.001, space="buy", optimize=False)
     # 다음 펀딩 시점이 이 분(min) 이내면 신규 진입 차단
     funding_blackout_minutes = IntParameter(0, 30, default=5, space="buy", optimize=False)
+    # 다중 시간프레임 추세 일치 가드 (D-3). 0=비활성 / 1=활성
+    trend_filter_1h = IntParameter(0, 1, default=1, space="buy", optimize=True)
+    trend_filter_4h = IntParameter(0, 1, default=0, space="buy", optimize=True)
 
     # 펀딩 캐시: { pair: {"rate": float, "next_ts_ms": int, "fetched_at": float} }
     _funding_cache: dict = {}
@@ -97,6 +106,50 @@ class KaiBaseStrategy(IStrategy):
     ) -> float:
         """모든 페어 동일 레버리지 적용"""
         return self.leverage_value
+
+    # ============================================================
+    # 다중 시간프레임 (D-3): 1h / 4h 추세 컨텍스트
+    # ============================================================
+    def informative_pairs(self):
+        """페어별 1h, 4h 데이터 추가 fetch."""
+        if not self.dp:
+            return []
+        whitelist = self.dp.current_whitelist()
+        return [(p, "1h") for p in whitelist] + [(p, "4h") for p in whitelist]
+
+    def _attach_higher_tf(self, dataframe: DataFrame, pair: str) -> DataFrame:
+        """1h/4h 추세 컬럼을 메인 dataframe에 병합. fail-soft."""
+        if not self.dp:
+            return dataframe
+
+        # 1h: 단기/중기 EMA 정배열 → 상승 추세
+        try:
+            inf_1h = self.dp.get_pair_dataframe(pair=pair, timeframe="1h").copy()
+            if not inf_1h.empty and len(inf_1h) >= 50:
+                inf_1h["ema_20"] = ta.EMA(inf_1h, timeperiod=20)
+                inf_1h["ema_50"] = ta.EMA(inf_1h, timeperiod=50)
+                inf_1h["rsi"] = ta.RSI(inf_1h, timeperiod=14)
+                inf_1h["trend_up"] = (inf_1h["ema_20"] > inf_1h["ema_50"]).astype(int)
+                dataframe = merge_informative_pair(
+                    dataframe, inf_1h, self.timeframe, "1h", ffill=True
+                )
+        except Exception as e:
+            logger.warning(f"[mtf] 1h merge failed for {pair}: {e}")
+
+        # 4h: 장기 EMA 정배열 → 거시 추세
+        try:
+            inf_4h = self.dp.get_pair_dataframe(pair=pair, timeframe="4h").copy()
+            if not inf_4h.empty and len(inf_4h) >= 200:
+                inf_4h["ema_50"] = ta.EMA(inf_4h, timeperiod=50)
+                inf_4h["ema_200"] = ta.EMA(inf_4h, timeperiod=200)
+                inf_4h["trend_up"] = (inf_4h["ema_50"] > inf_4h["ema_200"]).astype(int)
+                dataframe = merge_informative_pair(
+                    dataframe, inf_4h, self.timeframe, "4h", ffill=True
+                )
+        except Exception as e:
+            logger.warning(f"[mtf] 4h merge failed for {pair}: {e}")
+
+        return dataframe
 
     # ============================================================
     # 펀딩 비율 (실시간 조회 + 캐싱)
@@ -251,9 +304,13 @@ class KaiBaseStrategy(IStrategy):
         dataframe["rsi"] = ta.RSI(dataframe, timeperiod=14)
         dataframe["atr"] = ta.ATR(dataframe, timeperiod=14)
 
+        # 다중 시간프레임 추세 (D-3): trend_up_1h, trend_up_4h 컬럼 자동 추가
+        pair = metadata.get("pair", "")
+        if pair:
+            dataframe = self._attach_higher_tf(dataframe, pair)
+
         # 펀딩 비율: bot_loop_start가 채운 캐시에서 읽음.
         # 실시간 캐시 → 마지막 캔들에 brodcast (백테스트는 0.0 유지).
-        pair = metadata.get("pair", "")
         info = self._funding_cache.get(pair) or {}
         dataframe["funding_rate"] = float(info.get("rate", 0.0))
         # 다음 펀딩까지 남은 분 (없으면 큰 값으로 — 가드 무력화)
@@ -272,7 +329,7 @@ class KaiBaseStrategy(IStrategy):
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         # 공통 가드: FreqAI 신뢰도 + 펀딩 비율 절대값 + 펀딩 직전 차단
         blackout_min = float(self.funding_blackout_minutes.value)
-        guard_long = (
+        guard_base = (
             (dataframe["do_predict"] == 1)
             & (dataframe["DI_values"] < self.di_threshold_buy.value)
             & (dataframe["funding_rate"].abs() < self.funding_max.value)
@@ -280,23 +337,46 @@ class KaiBaseStrategy(IStrategy):
             & (dataframe["volume"] > 0)
         )
 
-        # 롱 진입: 예측값 > 임계 + EMA 정배열 + RSI 과매도 회복
+        # 다중 시간프레임 추세 가드 (D-3). informative 미존재/NaN은 1(추세 OK)로 폴백.
+        ones = pd.Series(1, index=dataframe.index)
+        trend_up_1h = (
+            dataframe.get("trend_up_1h", ones).fillna(1).astype(int)
+            if int(self.trend_filter_1h.value)
+            else ones
+        )
+        trend_up_4h = (
+            dataframe.get("trend_up_4h", ones).fillna(1).astype(int)
+            if int(self.trend_filter_4h.value)
+            else ones
+        )
+        long_trend_ok = (trend_up_1h == 1) & (trend_up_4h == 1)
+        short_trend_ok = (trend_up_1h == 0) & (trend_up_4h == 0)
+        # 4h 가드가 꺼졌으면 short 쪽도 4h 일치 요구 안 함
+        if not int(self.trend_filter_4h.value):
+            short_trend_ok = trend_up_1h == 0
+        if not int(self.trend_filter_1h.value):
+            long_trend_ok = ones.astype(bool)
+            short_trend_ok = ones.astype(bool)
+
+        # 롱 진입: 예측값 > 임계 + EMA 정배열 + RSI 과매도 회복 + MTF 상승 추세
         dataframe.loc[
-            guard_long
+            guard_base
             & (dataframe["&-s_close"] > self.buy_threshold.value)
             & (dataframe["ema_20"] > dataframe["ema_50"])
             & (dataframe["rsi"] > 30)
-            & (dataframe["rsi"] < 70),
+            & (dataframe["rsi"] < 70)
+            & long_trend_ok,
             ["enter_long", "enter_tag"],
         ] = (1, "freqai_long")
 
-        # 숏 진입: 예측값 < 임계 + EMA 역배열 + RSI 과매수 회복
+        # 숏 진입: 예측값 < 임계 + EMA 역배열 + RSI 과매수 회복 + MTF 하락 추세
         dataframe.loc[
-            guard_long
+            guard_base
             & (dataframe["&-s_close"] < self.sell_threshold.value)
             & (dataframe["ema_20"] < dataframe["ema_50"])
             & (dataframe["rsi"] < 70)
-            & (dataframe["rsi"] > 30),
+            & (dataframe["rsi"] > 30)
+            & short_trend_ok,
             ["enter_short", "enter_tag"],
         ] = (1, "freqai_short")
 

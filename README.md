@@ -101,7 +101,7 @@ docker compose run --rm freqtrade backtesting \
 # 데이터 다운로드
 docker compose run --rm freqtrade download-data \
   --exchange binance --pairs BTC/USDT:USDT ETH/USDT:USDT \
-  --timeframes 5m 15m 1h --days 90 --trading-mode futures
+  --timeframes 5m 15m 1h 4h --days 90 --trading-mode futures
 ```
 
 ## 주의사항 5가지
