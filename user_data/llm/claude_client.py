@@ -1,12 +1,13 @@
 """
-claude_client.py - Claude API 통합
+claude_client.py - Claude API 통합 (Messages API 직접 호출, SDK 미사용)
 
 핵심 원칙:
 1. 매 캔들마다 호출 금지. 캐시 TTL 기반 (기본 30분)
 2. 이벤트 트리거 호출 (변동성 급증 시) 별도 분리
 3. 응답 파싱 실패 시 기본값(중립 0.0) 반환, 거래 영향 최소화
-4. JSON Schema 강제로 환각 차단 — 시스템 프롬프트 + JSON-only 출력
+4. JSON Schema 강제로 환각 차단 — 시스템 프롬프트 + assistant prefill
 5. 일일 비용 상한(cost_tracker) 도달 시 폴백 모델 또는 호출 차단
+6. 외부 의존성 0 — stdlib(urllib)만 사용 → freqtrade 이미지 그대로 사용 가능
 """
 
 from __future__ import annotations
@@ -15,11 +16,17 @@ import json
 import logging
 import os
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from user_data.llm import cost_tracker
 
 logger = logging.getLogger(__name__)
+
+ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
+ANTHROPIC_TIMEOUT = float(os.getenv("ANTHROPIC_HTTP_TIMEOUT", "15"))
 
 CACHE_DIR = Path(os.getenv("LLM_CACHE_BASE_DIR", "/freqtrade/user_data/llm/cache"))
 FAILURE_DIR = CACHE_DIR / "_failures"
@@ -94,7 +101,8 @@ def _strict_parse(raw: str) -> dict | None:
 
 def _call_claude(system: str, user: str, max_tokens: int) -> tuple[str, dict] | None:
     """
-    Claude 호출 공통. 비용 가드 + JSON 강제 + 사용량 기록.
+    Claude Messages API 직접 호출 (urllib, SDK 미사용).
+    비용 가드 + JSON 강제(assistant prefill) + 사용량 기록.
     반환: (raw_text, usage_dict) or None
     """
     if not ANTHROPIC_API_KEY:
@@ -106,46 +114,69 @@ def _call_claude(system: str, user: str, max_tokens: int) -> tuple[str, dict] | 
         # 하드 캡 도달
         return None
 
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        logger.error("anthropic SDK not installed")
-        return None
-
-    try:
-        client = Anthropic(api_key=ANTHROPIC_API_KEY)
-        message = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=[
+    payload = json.dumps(
+        {
+            "model": model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": [
                 {"role": "user", "content": user},
                 # assistant 프리필 — JSON 시작 강제
                 {"role": "assistant", "content": "{"},
             ],
-        )
+        }
+    ).encode("utf-8")
+
+    req = urllib.request.Request(
+        ANTHROPIC_ENDPOINT,
+        data=payload,
+        method="POST",
+        headers={
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": ANTHROPIC_VERSION,
+            "content-type": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=ANTHROPIC_TIMEOUT) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        # 4xx/5xx — 응답 본문 보존해 디버깅
+        try:
+            err_body = e.read().decode("utf-8")
+        except Exception:
+            err_body = str(e)
+        logger.error(f"[Claude] HTTP {e.code}: {err_body[:500]}")
+        return None
+    except (urllib.error.URLError, TimeoutError) as e:
+        logger.error(f"[Claude] network error: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"[Claude] response decode failed: {e}")
+        return None
     except Exception as e:
-        logger.error(f"[Claude] API call failed: {e}")
+        logger.error(f"[Claude] unexpected error: {e}")
         return None
 
     # content 추출
     try:
-        text = message.content[0].text
-    except Exception as e:
-        logger.error(f"[Claude] response shape unexpected: {e}")
+        text = body["content"][0]["text"]
+    except (KeyError, IndexError, TypeError) as e:
+        logger.error(f"[Claude] unexpected response shape: {e}, body={body!r}")
         return None
 
     # 프리필이 적용된 경우 응답이 "..." 처럼 시작 — '{' 보충
     if not text.lstrip().startswith("{"):
         text = "{" + text
 
-    # 사용량 기록
-    usage = {}
+    # 사용량 기록 (응답의 usage 필드)
+    usage_obj = body.get("usage") or {}
+    usage = {
+        "input_tokens": int(usage_obj.get("input_tokens", 0) or 0),
+        "output_tokens": int(usage_obj.get("output_tokens", 0) or 0),
+    }
     try:
-        usage = {
-            "input_tokens": int(getattr(message.usage, "input_tokens", 0)),
-            "output_tokens": int(getattr(message.usage, "output_tokens", 0)),
-        }
         cost_tracker.record_usage(model, usage["input_tokens"], usage["output_tokens"])
     except Exception as e:
         logger.warning(f"[Claude] usage record failed: {e}")
