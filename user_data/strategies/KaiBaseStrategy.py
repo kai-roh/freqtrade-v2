@@ -11,17 +11,26 @@ KaiBaseStrategy - Freqtrade + FreqAI + Claude 기반 USDT-M Futures 전략
 """
 
 import logging
+import sys
 import time
+from pathlib import Path
 
-import pandas as pd
-import talib.abstract as ta
-from freqtrade.strategy import (
+# /freqtrade 를 sys.path에 추가해 user_data.llm.* 패키지 import 가능하게.
+# Freqtrade가 strategy를 동적 로드할 때 cwd만 잡고 /freqtrade 를 path에 안 넣음.
+# parents[2] = .../user_data/strategies → .../user_data → .../  (= /freqtrade in container)
+_FT_ROOT = str(Path(__file__).resolve().parents[2])
+if _FT_ROOT not in sys.path:
+    sys.path.insert(0, _FT_ROOT)
+
+import pandas as pd  # noqa: E402
+import talib.abstract as ta  # noqa: E402
+from freqtrade.strategy import (  # noqa: E402
     DecimalParameter,
     IntParameter,
     IStrategy,
     merge_informative_pair,
 )
-from pandas import DataFrame
+from pandas import DataFrame  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
