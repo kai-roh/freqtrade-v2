@@ -16,6 +16,8 @@ user_data/llm/cache/
 user_data/daily_reports/
 user_data/*.sqlite
 user_data/*.sqlite-journal
+user_data/*.sqlite-shm
+user_data/*.sqlite-wal
 user_data/tradesv3.dryrun.sqlite
 
 # === Python ===
