@@ -77,9 +77,12 @@ def _strict_parse(raw: str) -> Optional[dict]:
     s = raw.strip()
     # 코드펜스 제거 (모델이 system 무시하고 ```json 붙이는 경우 대비)
     if s.startswith("```"):
-        s = s.split("```", 2)[-1] if s.count("```") >= 2 else s.lstrip("`")
+        s = s[3:]
         if s.lower().startswith("json"):
-            s = s[4:].lstrip()
+            s = s[4:]
+        s = s.lstrip()
+        if s.endswith("```"):
+            s = s[:-3].rstrip()
     # 가장 바깥 { ... } 만 추출
     start, end = s.find("{"), s.rfind("}")
     if start < 0 or end < 0 or end <= start:

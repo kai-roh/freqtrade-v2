@@ -190,14 +190,21 @@
 
 ### Phase E. 안정성 & 품질 (지속)
 
-#### E-1. 단위 테스트
-| 대상 | 테스트 |
-|---|---|
-| `claude_client.get_cached_sentiment` | 캐시 히트/미스/만료, JSON 파싱 실패 |
-| `KaiBaseStrategy.populate_entry_trend` | 가드 조건별 진입 발생/미발생 시나리오 |
-| `fee_reconciliation` | 합계/차이 계산, 임계값 분기 |
+#### E-1. 단위 테스트 ✅
+**완료 (2026-05-07)** — 61개 테스트, 호스트 Python(stdlib + pytest)에서 0.5s에 실행. 외부 API 전부 mock.
 
-`pytest` + `freqtrade` 이미지 내부에서 실행. 목표 커버리지 60% (외부 API 호출은 mock).
+| 모듈 | 테스트 수 | 커버 |
+|---|---:|---|
+| `cost_tracker` | 12 | 가격, 캡, 폴백, 디스크 영속, 일자 롤오버, 손상 복구 |
+| `news_sources` | 12 | 페어 매핑, 캐시 hit/miss/expiry, CryptoPanic mock, 폴백 |
+| `claude_client` | 14 | JSON 파싱(코드펜스/꼬리잡음/엉터리), 캐시, 신뢰도 damping, 이벤트 호출, 뉴스 주입 검증 |
+| `fee_reconciliation` | 7 | sqlite fixture, tolerance ok/exceeded, open trade skip, --json |
+| `backtest_report` | 7 | PASS/FAIL gate, 누락/손상 입력, 페어 percent 스케일 자동 감지 |
+| `daily_report` | 8 | 알림 분기 4종, 빈 입력, open trades 렌더, _pct 헬퍼 |
+
+**부수 발견 — 진짜 버그 수정**: `_strict_parse`의 `split("```", 2)[-1]`이 trailing fence로 빈 문자열을 잡던 버그를 테스트가 잡아 fix.
+
+**보류**: `KaiBaseStrategy` 단위 테스트는 freqtrade/talib 의존성으로 별도 Docker harness 필요. 통합 테스트로 분리 예정.
 
 #### E-2. 코드 품질
 - `ruff` + `black` 린트

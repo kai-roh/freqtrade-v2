@@ -69,8 +69,15 @@ open http://localhost:8080
 # 복귀
 ./scripts/control.sh resume
 
-# 일일 수수료 검증
+# 일일 통합 리포트 (PnL + fee + Claude 비용 + 알림)
+./scripts/control.sh daily_report
+
+# 일일 수수료만 검증
 docker compose run --rm freqtrade python /freqtrade/scripts/fee_reconciliation.py
+
+# 단위 테스트 (호스트에서)
+pip install -r requirements-dev.txt
+./scripts/test.sh
 
 # 백테스트 (자동화: 데이터 다운로드 + 백테스트 + 마크다운 리포트)
 ./scripts/run_backtest.sh --days 90
