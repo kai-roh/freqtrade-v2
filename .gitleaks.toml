@@ -1,0 +1,20 @@
+# gitleaks configuration
+# 기본 룰셋 + placeholder/문서용 false positive 제외
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholder values in template/docs"
+paths = [
+    '''\.env\.example$''',
+    '''docs/.*\.md$''',
+    '''README\.md$''',
+]
+regexes = [
+    # 명백한 placeholder 패턴
+    '''xxxxxxxxxxxxxxx+''',
+    '''your_[a-z_]+_here''',
+    '''change_this_[a-z_]+''',
+    '''run_openssl_rand_hex_32_and_paste_here''',
+]

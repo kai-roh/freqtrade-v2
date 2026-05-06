@@ -210,10 +210,14 @@
 - `ruff` + `black` 린트
 - `mypy --strict` 점진 적용 (전략 파일은 freqtrade 시그니처 제약상 일부 type ignore)
 
-#### E-3. CI (GitHub Actions, 저장소 공개 시)
-1. `lint + test` 워크플로
-2. `freqtrade backtesting --dry-run-data` 스모크 테스트
-3. **시크릿(.env)이 commit되지 않도록 `gitleaks`** 또는 pre-commit 훅
+#### E-3. CI (GitHub Actions) ✅
+**완료 (2026-05-07)**:
+1. ✅ `.github/workflows/ci.yml` — push/PR 트리거, Python 3.11/3.12 매트릭스 pytest + py_compile + `bash -n` 린트, concurrency 취소
+2. ✅ `.github/workflows/secrets.yml` — gitleaks 시크릿 스캔 (push/PR + 매주 월 06:00 UTC cron)
+3. ✅ `.gitleaks.toml` — `.env.example` placeholder false positive 제외
+4. ✅ README CI/Secrets 배지
+
+**보류**: freqtrade backtesting 스모크는 freqai 이미지(>2GB) pull 시간 비용 큼. 별도 매뉴얼/스케줄 워크플로로 분리 예정.
 
 #### E-4. 시크릿 관리
 - `.env`는 절대 커밋 금지 → `.gitignore` 보강 필요(현재 미확인, 점검)

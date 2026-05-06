@@ -1,5 +1,8 @@
 # Kai Freqtrade Kit - Quick Start
 
+[![CI](https://github.com/kai-roh/freqtrade-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/kai-roh/freqtrade-v2/actions/workflows/ci.yml)
+[![Secrets Scan](https://github.com/kai-roh/freqtrade-v2/actions/workflows/secrets.yml/badge.svg)](https://github.com/kai-roh/freqtrade-v2/actions/workflows/secrets.yml)
+
 ## 5분 안에 띄우기
 
 ```bash
