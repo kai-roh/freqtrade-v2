@@ -82,27 +82,7 @@
     {"method": "StaticPairList"}
   ],
 
-  "_comment_protections": "라이브 전환 후 활성화 권장",
-  "protections": [
-    {
-      "method": "StoplossGuard",
-      "lookback_period_candles": 60,
-      "trade_limit": 2,
-      "stop_duration_candles": 60,
-      "only_per_pair": false
-    },
-    {
-      "method": "MaxDrawdown",
-      "lookback_period_candles": 288,
-      "trade_limit": 5,
-      "stop_duration_candles": 144,
-      "max_allowed_drawdown": 0.05
-    },
-    {
-      "method": "CooldownPeriod",
-      "stop_duration_candles": 3
-    }
-  ],
+  "_comment_protections": "Freqtrade 2026.4+ : protections는 strategy의 @property로 정의 (KaiBaseStrategy.protections 참조)",
 
   "freqai": {
     "enabled": true,

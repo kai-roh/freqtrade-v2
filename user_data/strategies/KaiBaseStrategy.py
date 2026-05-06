@@ -78,6 +78,30 @@ class KaiBaseStrategy(IStrategy):
     # 펀딩 캐시: { pair: {"rate": float, "next_ts_ms": int, "fetched_at": float} }
     _funding_cache: dict = {}
 
+    # === 보호 로직 (Freqtrade 2026.4+: strategy @property로 정의 필수) ===
+    @property
+    def protections(self) -> list[dict]:
+        return [
+            {
+                "method": "StoplossGuard",
+                "lookback_period_candles": 60,
+                "trade_limit": 2,
+                "stop_duration_candles": 60,
+                "only_per_pair": False,
+            },
+            {
+                "method": "MaxDrawdown",
+                "lookback_period_candles": 288,
+                "trade_limit": 5,
+                "stop_duration_candles": 144,
+                "max_allowed_drawdown": 0.05,
+            },
+            {
+                "method": "CooldownPeriod",
+                "stop_duration_candles": 3,
+            },
+        ]
+
     # === 플롯 설정 ===
     plot_config = {
         "main_plot": {
