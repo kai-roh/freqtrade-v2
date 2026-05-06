@@ -1,0 +1,168 @@
+{
+  "max_open_trades": 3,
+  "stake_currency": "USDT",
+  "stake_amount": 50,
+  "tradable_balance_ratio": 0.95,
+  "fiat_display_currency": "USD",
+  "timeframe": "5m",
+  "dry_run": true,
+  "dry_run_wallet": 1000,
+  "cancel_open_orders_on_exit": true,
+  "trading_mode": "futures",
+  "margin_mode": "isolated",
+  "amend_last_stake_amount": true,
+  "process_only_new_candles": true,
+
+  "_comment_fee": "Binance USDT-M VIP0 maker 0.018%, taker 0.05%, BNB할인 10% 적용 후 0.045%, 안전마진 1.5배 = 0.067%",
+  "fee": 0.00067,
+
+  "unfilledtimeout": {
+    "entry": 10,
+    "exit": 10,
+    "exit_timeout_count": 0,
+    "unit": "minutes"
+  },
+
+  "entry_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "check_depth_of_market": {
+      "enabled": false,
+      "bids_to_ask_delta": 1
+    }
+  },
+
+  "exit_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1
+  },
+
+  "order_types": {
+    "entry": "limit",
+    "exit": "limit",
+    "emergency_exit": "market",
+    "force_entry": "market",
+    "force_exit": "market",
+    "stoploss": "market",
+    "stoploss_on_exchange": true,
+    "stoploss_on_exchange_interval": 60,
+    "stoploss_on_exchange_limit_ratio": 0.99
+  },
+
+  "order_time_in_force": {
+    "entry": "GTC",
+    "exit": "GTC"
+  },
+
+  "exchange": {
+    "name": "binance",
+    "key": "${BINANCE_API_KEY}",
+    "secret": "${BINANCE_API_SECRET}",
+    "ccxt_config": {},
+    "ccxt_async_config": {},
+    "pair_whitelist": [
+      "BTC/USDT:USDT",
+      "ETH/USDT:USDT",
+      "SOL/USDT:USDT",
+      "BNB/USDT:USDT",
+      "XRP/USDT:USDT"
+    ],
+    "pair_blacklist": [
+      ".*BEAR/.*",
+      ".*BULL/.*",
+      ".*UP/.*",
+      ".*DOWN/.*"
+    ]
+  },
+
+  "pairlists": [
+    {"method": "StaticPairList"}
+  ],
+
+  "_comment_protections": "라이브 전환 후 활성화 권장",
+  "protections": [
+    {
+      "method": "StoplossGuard",
+      "lookback_period_candles": 60,
+      "trade_limit": 2,
+      "stop_duration_candles": 60,
+      "only_per_pair": false
+    },
+    {
+      "method": "MaxDrawdown",
+      "lookback_period_candles": 288,
+      "trade_limit": 5,
+      "stop_duration_candles": 144,
+      "max_allowed_drawdown": 0.05
+    },
+    {
+      "method": "CooldownPeriod",
+      "stop_duration_candles": 3
+    }
+  ],
+
+  "freqai": {
+    "enabled": true,
+    "purge_old_models": 2,
+    "train_period_days": 14,
+    "backtest_period_days": 2,
+    "live_retrain_hours": 6,
+    "expiration_hours": 12,
+    "identifier": "kai_v1",
+    "fit_live_predictions_candles": 300,
+    "data_kitchen_thread_count": 4,
+    "feature_parameters": {
+      "include_timeframes": ["5m", "15m", "1h"],
+      "include_corr_pairlist": ["BTC/USDT:USDT", "ETH/USDT:USDT"],
+      "label_period_candles": 12,
+      "include_shifted_candles": 3,
+      "DI_threshold": 0.9,
+      "weight_factor": 0.9,
+      "principal_component_analysis": false,
+      "use_SVM_to_remove_outliers": true,
+      "indicator_periods_candles": [10, 20, 50],
+      "noise_standard_deviation": 0.05,
+      "buffer_train_data_candles": 20
+    },
+    "data_split_parameters": {
+      "test_size": 0.25,
+      "shuffle": false
+    },
+    "model_training_parameters": {
+      "n_estimators": 800,
+      "learning_rate": 0.02,
+      "num_leaves": 64,
+      "max_depth": 8,
+      "verbose": -1
+    }
+  },
+
+  "telegram": {
+    "enabled": false,
+    "token": "${TELEGRAM_TOKEN}",
+    "chat_id": "${TELEGRAM_CHAT_ID}"
+  },
+
+  "api_server": {
+    "enabled": true,
+    "listen_ip_address": "0.0.0.0",
+    "listen_port": 8080,
+    "verbosity": "error",
+    "enable_openapi": true,
+    "jwt_secret_key": "${JWT_SECRET}",
+    "CORS_origins": ["http://localhost:8080"],
+    "username": "${FREQTRADE_USERNAME}",
+    "password": "${FREQTRADE_PASSWORD}"
+  },
+
+  "bot_name": "kai_freqtrade",
+  "initial_state": "running",
+  "force_entry_enable": false,
+  "internals": {
+    "process_throttle_secs": 5,
+    "heartbeat_interval": 60
+  }
+}

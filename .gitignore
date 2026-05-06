@@ -1,0 +1,55 @@
+# === Secrets ===
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# === Freqtrade runtime artifacts ===
+user_data/logs/
+user_data/models/
+user_data/backtest_results/
+user_data/hyperopt_results/
+user_data/data/
+user_data/notebooks/
+user_data/llm/cache/
+user_data/*.sqlite
+user_data/*.sqlite-journal
+user_data/tradesv3.dryrun.sqlite
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# === macOS ===
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# === Backups ===
+*.bak
+*.orig
