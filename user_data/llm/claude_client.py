@@ -102,8 +102,12 @@ def _strict_parse(raw: str) -> dict | None:
 def _call_claude(system: str, user: str, max_tokens: int) -> tuple[str, dict] | None:
     """
     Claude Messages API 직접 호출 (urllib, SDK 미사용).
-    비용 가드 + JSON 강제(assistant prefill) + 사용량 기록.
+    비용 가드 + JSON 강제(system prompt) + 사용량 기록.
     반환: (raw_text, usage_dict) or None
+
+    NOTE: claude-opus-4-7 등 일부 신규 모델은 assistant prefill 메시지를 받지 않음
+    ("This model does not support assistant message"). 시스템 프롬프트의 JSON-only
+    지시 + _strict_parse 의 코드펜스/꼬리잡음 제거로 안정성 확보.
     """
     if not ANTHROPIC_API_KEY:
         logger.warning("ANTHROPIC_API_KEY not set")
@@ -121,8 +125,6 @@ def _call_claude(system: str, user: str, max_tokens: int) -> tuple[str, dict] | 
             "system": system,
             "messages": [
                 {"role": "user", "content": user},
-                # assistant 프리필 — JSON 시작 강제
-                {"role": "assistant", "content": "{"},
             ],
         }
     ).encode("utf-8")

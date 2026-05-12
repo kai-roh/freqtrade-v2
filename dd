@@ -1,0 +1,62 @@
+  COMPARTMENT="ocid1.tenancy.oc1..aaaaaaaarcnvkdv6a7d4pejasy6hcvpdehklt5jf24ryhcwlpxgn7z6gqr4q"
+  SUBNET="ocid1.subnet.oc1.ap-chuncheon-1.aaaaaaaaj7tutitipeploonlg7uea227rqpg6z2uh3jnttjo6de3rb5blqkq"
+  IMAGE="ocid1.image.oc1.ap-chuncheon-1.aaaaaaaalcmf2em45er7hd7rc3mfm24ylgfogqefet6ajzujjx6jme7blosq"
+  AD="ZOge:AP-CHUNCHEON-1-AD-1"
+  SSH_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF8KYPcRHjB+9WYYNzpninh8Pe6ugBx/j6LCS5T2Vb7Z oracle-ft"
+
+  while true; do
+    echo "=== try at $(date) ==="
+    oci compute instance launch \
+      --availability-domain "$AD" \
+      --compartment-id "$COMPARTMENT" \
+      --shape "VM.Standard.A1.Flex" \
+      --shape-config '{"ocpus":2,"memoryInGBs":12}' \
+      --image-id "$IMAGE" \
+      --subnet-id "$SUBNET" \
+      --display-name "freqtrade-1" \
+      --assign-public-ip true \
+      --metadata "{\"ssh_authorized_keys\":\"$SSH_KEY\"}" \
+      && break
+    sleep 180
+  done
+
+  COMPARTMENT="ocid1.tenancy.oc1..aaaaaaaarcnvkdv6a7d4pejasy6hcvpdehklt5jf24ryhcwlpxgn7z6gqr4q"
+  AD="ZOge:AP-CHUNCHEON-1-AD-1"
+  IMAGE="ocid1.image.oc1.ap-chuncheon-1.aaaaaaaalcmf2em45er7hd7rc3mfm24ylgfogqefet6ajzujjx6jme7blosq"
+  SUBNET="ocid1.subnet.oc1.ap-chuncheon-1.aaaaaaaaj7tutitipeploonlg7uea227rqpg6z2uh3jnttjo6de3rb5blqkq"
+  SSH_KEY_PATH="$HOME/.ssh/oracle.pub"
+  DISPLAY_NAME="freqtrade-1"
+  OCPUS=2          # 안 잡히면 1로
+  RAM_GB=12        # 안 잡히면 6으로
+  SLEEP=180        # 재시도 간격(초)
+  # ===================
+
+  LOG="$HOME/retry-oci.log"
+  SSH_KEY="$(cat "$SSH_KEY_PATH")"
+
+  echo "=== START at $(date) ===" | tee -a "$LOG"
+
+  while true; do
+    TS=$(date "+%Y-%m-%d %H:%M:%S")
+    echo "[$TS] launching..." | tee -a "$LOG"
+
+    if oci compute instance launch \
+        --availability-domain "$AD" \
+        --compartment-id "$COMPARTMENT" \
+        --shape "VM.Standard.A1.Flex" \
+        --shape-config "{\"ocpus\":${OCPUS},\"memoryInGBs\":${RAM_GB}}" \
+        --image-id "$IMAGE" \
+        --subnet-id "$SUBNET" \
+        --display-name "$DISPLAY_NAME" \
+        --assign-public-ip true \
+        --metadata "{\"ssh_authorized_keys\":\"$SSH_KEY\"}" \
+        >> "$LOG" 2>&1; then
+      echo "[$TS] SUCCESS" | tee -a "$LOG"
+      osascript -e 'display notification "Oracle A1 instance created!" with
+  title "Freqtrade" sound name "Glass"' 2>/dev/null || true
+      say "Oracle A1 instance created" 2>/dev/null || true
+      break
+    fi
+    echo "[$TS] still out of capacity, retry in ${SLEEP}s" | tee -a "$LOG"
+    sleep "$SLEEP"
+  done
