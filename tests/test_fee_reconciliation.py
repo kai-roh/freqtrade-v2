@@ -115,6 +115,23 @@ def test_tolerance_exceeded_recommends_fee(fr, monkeypatch):
     assert 0.002 < out["recommended_fee"] < 0.003
 
 
+def test_empty_binance_trade_list_does_not_alert(fr, monkeypatch):
+    mod, db = fr
+    yest = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    _seed(
+        db,
+        [
+            (1, "BTC/USDT:USDT", 0, yest, yest, 60000.0, 60500.0, 0.01, 0.001, 0.001, 600.0, 5.0),
+        ],
+    )
+    monkeypatch.setattr(mod, "fetch_binance_actual_fees", lambda *a, **k: [])
+    out = mod.compute_reconciliation()
+    assert out["status"] == "no_real_trades"
+    assert out["real"]["trades"] == 0
+    assert out["diff_pct"] is None
+    assert out["recommended_fee"] is None
+
+
 def test_fetch_binance_no_keys_returns_none(fr, monkeypatch):
     mod, _ = fr
     monkeypatch.delenv("BINANCE_API_KEY", raising=False)

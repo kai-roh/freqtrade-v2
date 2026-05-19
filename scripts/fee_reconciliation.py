@@ -136,7 +136,8 @@ def compute_reconciliation(
           "diff_pct": float | None,
           "recommended_fee": float | None,
           "tolerance_pct": float,
-          "status": "ok" | "tolerance_exceeded" | "no_local_trades" | "no_binance_data",
+          "status": "ok" | "tolerance_exceeded" | "no_local_trades" |
+                    "no_binance_data" | "no_real_trades",
         }
     """
     out: dict = {
@@ -202,6 +203,13 @@ def compute_reconciliation(
         "effective_rate_pct": real_rate,
     }
 
+    # Dry-run / sparse live data often means Freqtrade has simulated local trades,
+    # while Binance has no corresponding real fills. Treat this as "comparison
+    # unavailable" rather than a -100% fee discrepancy.
+    if not binance_trades or total_real_volume <= 0:
+        out["status"] = "no_real_trades"
+        return out
+
     if total_local_fee > 0:
         diff_pct = (total_real_fee - total_local_fee) / total_local_fee * 100
         out["diff_pct"] = diff_pct
@@ -233,6 +241,10 @@ def _print_human(r: dict) -> None:
     print(f"Binance real trades: {real.get('trades', 0)}")
     print(f"Real total fee: ${real.get('fee_usd', 0):,.4f}")
     print(f"Real effective fee rate: {real.get('effective_rate_pct', 0):.4f}%\n")
+
+    if r["status"] == "no_real_trades":
+        print("No Binance real trades found for this lookback; fee comparison skipped.")
+        return
 
     diff = r.get("diff_pct")
     if diff is None:
