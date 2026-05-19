@@ -255,12 +255,11 @@ def _telegram_message(profit, alerts: list[str]) -> str:
     """Telegram 푸시용 짧은 요약 메시지."""
     lines: list[str] = []
     if alerts:
-        lines.append("*🚨 Freqtrade Alerts*")
+        lines.append("🚨 Freqtrade Alerts")
         for a in alerts:
-            # markdown 충돌 회피: '_*[]()' 등 특수문자를 단순 백틱으로 감쌈
-            lines.append(f"• {a}")
+            lines.append(f"- {a}")
     else:
-        lines.append("*✅ Freqtrade Daily — clean*")
+        lines.append("✅ Freqtrade Daily - clean")
 
     if profit:
         ratio = profit.get("profit_today")
@@ -268,12 +267,12 @@ def _telegram_message(profit, alerts: list[str]) -> str:
         try:
             today_pct = float(ratio) * 100
             lines.append("")
-            lines.append(f"Today P/L: `{today_pct:+.2f}%` ({absv})")
+            lines.append(f"Today P/L: {today_pct:+.2f}% ({absv})")
         except (TypeError, ValueError):
             pass
         try:
             cum_pct = float(profit.get("profit_all", 0)) * 100
-            lines.append(f"Cumulative: `{cum_pct:+.2f}%`")
+            lines.append(f"Cumulative: {cum_pct:+.2f}%")
         except (TypeError, ValueError):
             pass
     return "\n".join(lines)
@@ -341,7 +340,7 @@ def main() -> int:
         elif alerts or args.telegram_always:
             tg_text = _telegram_message(profit, alerts)
             ok = telegram_notify.send(
-                tg_text, parse_mode="Markdown", disable_notification=not bool(alerts)
+                tg_text, parse_mode=None, disable_notification=not bool(alerts)
             )
             print(f"[telegram] sent: {ok}", file=sys.stderr)
         else:

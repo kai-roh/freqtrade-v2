@@ -84,13 +84,21 @@ case "$1" in
     daily_report)
         # 통합 리포트: PnL + 일별 breakdown + fee 대사 + Claude 비용 + 알림
         # exit code: 0=clean / 1=alerts / 2=API down
+        shift
+        # Allow both:
+        #   ./scripts/control.sh daily_report --telegram
+        #   ./scripts/control.sh daily_report -- --telegram
+        # The second form is common when forwarding args through wrappers.
+        if [ "${1:-}" = "--" ]; then
+            shift
+        fi
         if docker compose ps --status running freqtrade 2>/dev/null | grep -q freqtrade; then
             docker compose exec -T freqtrade \
-                python /freqtrade/scripts/daily_report.py "${@:2}"
+                python /freqtrade/scripts/daily_report.py "$@"
         else
             # 컨테이너가 떠있지 않으면 ephemeral run
             docker compose run --rm -T freqtrade \
-                python /freqtrade/scripts/daily_report.py "${@:2}"
+                python /freqtrade/scripts/daily_report.py "$@"
         fi
         ;;
 
