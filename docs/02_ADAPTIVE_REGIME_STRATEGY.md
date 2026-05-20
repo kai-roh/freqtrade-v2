@@ -687,7 +687,12 @@ high_vol_B_long
    - 추가: DOGE, ADA, AVAX, LINK, TON
    - 동적 VolumePairList는 모델 churn을 피하기 위해 다음 단계로 보류한다.
 
-4. **운영 방침**
+4. **SVM outlier gate 완화**
+   - 초기 metrics에서 `do_predict_ok=0%` 병목이 확인됐다.
+   - `use_SVM_to_remove_outliers=false`로 전환하고, DI 가드는 유지한다.
+   - `di_threshold_buy` 기본값은 FreqAI `DI_threshold`와 맞춰 `0.90`으로 조정한다.
+
+5. **운영 방침**
    - 추가 7일 dry-run을 수행한다.
    - 자동 live 전환은 하지 않는다.
    - 7일 후 거래 수, 수수료 차감 손익, gate metrics, Claude 비용을 보고한 뒤 live 전환 여부를 묻는다.

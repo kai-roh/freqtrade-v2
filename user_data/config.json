@@ -107,7 +107,7 @@
       "DI_threshold": 0.9,
       "weight_factor": 0.9,
       "principal_component_analysis": false,
-      "use_SVM_to_remove_outliers": true,
+      "use_SVM_to_remove_outliers": false,
       "indicator_periods_candles": [10, 20, 50],
       "noise_standard_deviation": 0.05,
       "buffer_train_data_candles": 20

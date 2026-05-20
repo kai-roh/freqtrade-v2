@@ -79,7 +79,7 @@ class KaiBaseStrategy(IStrategy):
     # === 하이퍼옵트 가능 파라미터 ===
     buy_threshold = DecimalParameter(0.0, 0.02, default=0.005, space="buy", optimize=True)
     sell_threshold = DecimalParameter(-0.02, 0.0, default=-0.005, space="sell", optimize=True)
-    di_threshold_buy = DecimalParameter(0.5, 1.0, default=0.85, space="buy", optimize=True)
+    di_threshold_buy = DecimalParameter(0.5, 1.0, default=0.9, space="buy", optimize=True)
     funding_max = DecimalParameter(0.0005, 0.002, default=0.001, space="buy", optimize=False)
     # 다음 펀딩 시점이 이 분(min) 이내면 신규 진입 차단
     funding_blackout_minutes = IntParameter(0, 30, default=5, space="buy", optimize=False)
