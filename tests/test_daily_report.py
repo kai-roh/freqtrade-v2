@@ -108,6 +108,26 @@ def test_open_trades_table_renders(monkeypatch, tmp_path):
     assert "long" in md and "short" in md
 
 
+def test_entry_gate_metrics_table_renders(monkeypatch, tmp_path):
+    dr = _load_dr(monkeypatch, tmp_path)
+    metrics = [
+        {
+            "pair": "SOL/USDT:USDT",
+            "gates": {
+                "guard_base": {"pass": 120, "rate": 0.4167},
+                "long_prediction_ok": {"pass": 30, "rate": 0.1042},
+                "short_prediction_ok": {"pass": 45, "rate": 0.1562},
+                "final_long": {"pass": 2, "rate": 0.0069},
+                "final_short": {"pass": 3, "rate": 0.0104},
+            },
+        }
+    ]
+    md, alerts = dr._build_report(None, [], None, None, None, None, metrics)
+    assert alerts == []
+    assert "## Entry Gate Metrics" in md
+    assert "| SOL | 41.7% | 10.4% | 15.6% | 2 | 3 |" in md
+
+
 def test_pct_helper_ratio_vs_percent(monkeypatch, tmp_path):
     dr = _load_dr(monkeypatch, tmp_path)
     assert dr._pct(0.05) == "+5.00%"

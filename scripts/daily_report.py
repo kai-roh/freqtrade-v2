@@ -59,6 +59,7 @@ API_PASS = os.getenv("FREQTRADE_PASSWORD", "")
 
 DAILY_LOSS_ALERT_PCT = float(os.getenv("DAILY_LOSS_ALERT_PCT", "5.0"))
 FEE_DIFF_ALERT_PCT = float(os.getenv("FEE_DIFF_ALERT_PCT", "5.0"))
+ENTRY_METRICS_DIR = Path(os.getenv("ENTRY_METRICS_DIR", "/freqtrade/user_data/metrics"))
 
 
 def _api_get(path: str, timeout: float = 5.0) -> Any | None:
@@ -97,7 +98,44 @@ def _pct(x: Any, scale: str = "ratio", n: int = 2) -> str:
     return f"{v * 100:+.{n}f}%"
 
 
-def _build_report(profit, status, balance, daily, fee_recon, cost_state) -> tuple[str, list[str]]:
+def _load_entry_metrics(limit: int = 20) -> list[dict]:
+    """KaiBaseStrategy가 기록한 최신 페어별 entry gate metrics 로드."""
+    if not ENTRY_METRICS_DIR.exists():
+        return []
+
+    rows: list[dict] = []
+    for path in sorted(ENTRY_METRICS_DIR.glob("entry_gates_*.json")):
+        try:
+            rows.append(json.loads(path.read_text()))
+        except (OSError, json.JSONDecodeError):
+            continue
+    rows.sort(key=lambda r: r.get("timestamp", 0), reverse=True)
+    return rows[:limit]
+
+
+def _gate_rate(metrics: dict, name: str) -> str:
+    try:
+        return f"{float(metrics['gates'][name]['rate']) * 100:.1f}%"
+    except (KeyError, TypeError, ValueError):
+        return "—"
+
+
+def _gate_pass(metrics: dict, name: str) -> str:
+    try:
+        return str(int(metrics["gates"][name]["pass"]))
+    except (KeyError, TypeError, ValueError):
+        return "—"
+
+
+def _build_report(
+    profit,
+    status,
+    balance,
+    daily,
+    fee_recon,
+    cost_state,
+    entry_metrics: list[dict] | None = None,
+) -> tuple[str, list[str]]:
     """returns (markdown_body, alerts)"""
     alerts: list[str] = []
     L: list[str] = []
@@ -163,6 +201,28 @@ def _build_report(profit, status, balance, daily, fee_recon, cost_state) -> tupl
         L.append("")
     else:
         L.append("_API unreachable._")
+        L.append("")
+
+    # ---- Entry gate metrics ----
+    L.append("## Entry Gate Metrics")
+    L.append("")
+    if entry_metrics:
+        L.append("| Pair | Base | Long Pred | Short Pred | Long Final | Short Final |")
+        L.append("|---|---:|---:|---:|---:|---:|")
+        for m in entry_metrics:
+            pair = str(m.get("pair", "—")).replace("/USDT:USDT", "")
+            L.append(
+                "| "
+                f"{pair} | "
+                f"{_gate_rate(m, 'guard_base')} | "
+                f"{_gate_rate(m, 'long_prediction_ok')} | "
+                f"{_gate_rate(m, 'short_prediction_ok')} | "
+                f"{_gate_pass(m, 'final_long')} | "
+                f"{_gate_pass(m, 'final_short')} |"
+            )
+        L.append("")
+    else:
+        L.append("_No entry gate metrics yet._")
         L.append("")
 
     # ---- Daily breakdown ----
@@ -309,8 +369,9 @@ def main() -> int:
     api_alive = profit is not None or status is not None
     fee_recon = compute_reconciliation(lookback_days=args.days)
     cost_state = cost_tracker.get_state() if cost_tracker else None
+    entry_metrics = _load_entry_metrics()
 
-    md, alerts = _build_report(profit, status, balance, daily, fee_recon, cost_state)
+    md, alerts = _build_report(profit, status, balance, daily, fee_recon, cost_state, entry_metrics)
 
     print(md)
     print("")

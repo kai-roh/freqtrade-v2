@@ -10,6 +10,7 @@ KaiBaseStrategy - Freqtrade + FreqAI + Claude 기반 USDT-M Futures 전략
 작성자: Kai Roh
 """
 
+import json
 import logging
 import sys
 import time
@@ -37,6 +38,8 @@ logger = logging.getLogger(__name__)
 # 펀딩 비율 캐시 TTL — Binance 펀딩은 8시간 단위지만 rate는 분 단위로 변동.
 # 60초로 설정해 process_throttle_secs(5s)와 충돌 없이 분당 1회 갱신.
 _FUNDING_REFRESH_SECONDS = 60
+_ENTRY_METRICS_WRITE_SECONDS = 60
+_ENTRY_METRICS_DIR = Path("/freqtrade/user_data/metrics")
 
 
 class KaiBaseStrategy(IStrategy):
@@ -86,6 +89,8 @@ class KaiBaseStrategy(IStrategy):
 
     # 펀딩 캐시: { pair: {"rate": float, "next_ts_ms": int, "fetched_at": float} }
     _funding_cache: dict = {}
+    # entry gate metrics write throttle: {pair: epoch_seconds}
+    _entry_metrics_last_write: dict = {}
 
     # === 보호 로직 (Freqtrade 2026.4+: strategy @property로 정의 필수) ===
     @property
@@ -359,16 +364,91 @@ class KaiBaseStrategy(IStrategy):
     # ============================================================
     # 진입 시그널
     # ============================================================
+    def _record_entry_gate_metrics(
+        self,
+        dataframe: DataFrame,
+        metadata: dict,
+        masks: dict[str, pd.Series],
+        window: int = 288,
+    ) -> None:
+        """
+        진입 후보가 어느 가드에서 탈락하는지 페어별 JSON으로 기록.
+        5m 기준 288 candles ~= 24h. 전략 동작에는 영향 없는 관측 레이어.
+        """
+        pair = metadata.get("pair", "unknown")
+        now = time.time()
+        last = self._entry_metrics_last_write.get(pair, 0)
+        if now - last < _ENTRY_METRICS_WRITE_SECONDS:
+            return
+        self._entry_metrics_last_write[pair] = now
+
+        if dataframe.empty:
+            return
+
+        tail_index = dataframe.tail(window).index
+        total = len(tail_index)
+        if total <= 0:
+            return
+
+        summary: dict = {
+            "pair": pair,
+            "timeframe": self.timeframe,
+            "timestamp": int(now),
+            "window_candles": total,
+            "parameters": {
+                "buy_threshold": float(self.buy_threshold.value),
+                "sell_threshold": float(self.sell_threshold.value),
+                "di_threshold_buy": float(self.di_threshold_buy.value),
+                "funding_max": float(self.funding_max.value),
+                "funding_blackout_minutes": int(self.funding_blackout_minutes.value),
+                "trend_filter_1h": int(self.trend_filter_1h.value),
+                "trend_filter_4h": int(self.trend_filter_4h.value),
+            },
+            "gates": {},
+        }
+
+        for name, mask in masks.items():
+            try:
+                aligned = mask.reindex(tail_index).fillna(False).astype(bool)
+                passed = int(aligned.sum())
+                summary["gates"][name] = {
+                    "pass": passed,
+                    "rate": round(passed / total, 6),
+                }
+            except Exception as e:
+                summary["gates"][name] = {"error": str(e)}
+
+        try:
+            if "&-s_close" in dataframe.columns:
+                pred = dataframe["&-s_close"].reindex(tail_index).dropna()
+                if not pred.empty:
+                    summary["prediction"] = {
+                        "min": round(float(pred.min()), 6),
+                        "p25": round(float(pred.quantile(0.25)), 6),
+                        "p50": round(float(pred.quantile(0.50)), 6),
+                        "p75": round(float(pred.quantile(0.75)), 6),
+                        "max": round(float(pred.max()), 6),
+                    }
+        except Exception as e:
+            summary["prediction"] = {"error": str(e)}
+
+        try:
+            _ENTRY_METRICS_DIR.mkdir(parents=True, exist_ok=True)
+            safe_pair = pair.replace("/", "_").replace(":", "_")
+            path = _ENTRY_METRICS_DIR / f"entry_gates_{safe_pair}.json"
+            path.write_text(json.dumps(summary, indent=2, sort_keys=True))
+        except Exception as e:
+            logger.warning(f"[entry-metrics] write failed for {pair}: {e}")
+
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         # 공통 가드: FreqAI 신뢰도 + 펀딩 비율 절대값 + 펀딩 직전 차단
         blackout_min = float(self.funding_blackout_minutes.value)
-        guard_base = (
-            (dataframe["do_predict"] == 1)
-            & (dataframe["DI_values"] < self.di_threshold_buy.value)
-            & (dataframe["funding_rate"].abs() < self.funding_max.value)
-            & (dataframe["funding_minutes_to_next"] > blackout_min)
-            & (dataframe["volume"] > 0)
-        )
+        volume_ok = dataframe["volume"] > 0
+        do_predict_ok = dataframe["do_predict"] == 1
+        di_ok = dataframe["DI_values"] < self.di_threshold_buy.value
+        funding_rate_ok = dataframe["funding_rate"].abs() < self.funding_max.value
+        funding_blackout_ok = dataframe["funding_minutes_to_next"] > blackout_min
+        guard_base = do_predict_ok & di_ok & funding_rate_ok & funding_blackout_ok & volume_ok
 
         # 다중 시간프레임 추세 가드 (D-3). informative 미존재/NaN은 1(추세 OK)로 폴백.
         ones = pd.Series(1, index=dataframe.index)
@@ -391,25 +471,45 @@ class KaiBaseStrategy(IStrategy):
             long_trend_ok = ones.astype(bool)
             short_trend_ok = ones.astype(bool)
 
+        long_prediction_ok = dataframe["&-s_close"] > self.buy_threshold.value
+        short_prediction_ok = dataframe["&-s_close"] < self.sell_threshold.value
+        long_ema_ok = dataframe["ema_20"] > dataframe["ema_50"]
+        short_ema_ok = dataframe["ema_20"] < dataframe["ema_50"]
+        rsi_band_ok = (dataframe["rsi"] > 30) & (dataframe["rsi"] < 70)
+        final_long = guard_base & long_prediction_ok & long_ema_ok & rsi_band_ok & long_trend_ok
+        final_short = guard_base & short_prediction_ok & short_ema_ok & rsi_band_ok & short_trend_ok
+
+        self._record_entry_gate_metrics(
+            dataframe,
+            metadata,
+            {
+                "volume_ok": volume_ok,
+                "do_predict_ok": do_predict_ok,
+                "di_ok": di_ok,
+                "funding_rate_ok": funding_rate_ok,
+                "funding_blackout_ok": funding_blackout_ok,
+                "guard_base": guard_base,
+                "long_prediction_ok": long_prediction_ok,
+                "short_prediction_ok": short_prediction_ok,
+                "long_ema_ok": long_ema_ok,
+                "short_ema_ok": short_ema_ok,
+                "rsi_band_ok": rsi_band_ok,
+                "long_trend_ok": long_trend_ok,
+                "short_trend_ok": short_trend_ok,
+                "final_long": final_long,
+                "final_short": final_short,
+            },
+        )
+
         # 롱 진입: 예측값 > 임계 + EMA 정배열 + RSI 과매도 회복 + MTF 상승 추세
         dataframe.loc[
-            guard_base
-            & (dataframe["&-s_close"] > self.buy_threshold.value)
-            & (dataframe["ema_20"] > dataframe["ema_50"])
-            & (dataframe["rsi"] > 30)
-            & (dataframe["rsi"] < 70)
-            & long_trend_ok,
+            final_long,
             ["enter_long", "enter_tag"],
         ] = (1, "freqai_long")
 
         # 숏 진입: 예측값 < 임계 + EMA 역배열 + RSI 과매수 회복 + MTF 하락 추세
         dataframe.loc[
-            guard_base
-            & (dataframe["&-s_close"] < self.sell_threshold.value)
-            & (dataframe["ema_20"] < dataframe["ema_50"])
-            & (dataframe["rsi"] < 70)
-            & (dataframe["rsi"] > 30)
-            & short_trend_ok,
+            final_short,
             ["enter_short", "enter_tag"],
         ] = (1, "freqai_short")
 
