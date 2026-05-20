@@ -691,6 +691,7 @@ high_vol_B_long
    - 초기 metrics에서 `do_predict_ok=0%` 병목이 확인됐다.
    - `use_SVM_to_remove_outliers=false`로 전환하고, DI 가드는 유지한다.
    - `di_threshold_buy` 기본값은 FreqAI `DI_threshold`와 맞춰 `0.90`으로 조정한다.
+   - 기존 `kai_v1` 모델 재사용을 피하기 위해 FreqAI identifier를 `kai_v2_svmoff`로 변경해 재학습을 강제한다.
 
 5. **운영 방침**
    - 추가 7일 dry-run을 수행한다.
