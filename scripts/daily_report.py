@@ -207,14 +207,17 @@ def _build_report(
     L.append("## Entry Gate Metrics")
     L.append("")
     if entry_metrics:
-        L.append("| Pair | DoPred | DI | Fund | Base | L Pred | S Pred | L Final | S Final |")
-        L.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+        L.append(
+            "| Pair | PredUse | Pred1 | DI | Fund | Base | L Pred | S Pred | L Final | S Final |"
+        )
+        L.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
         for m in entry_metrics:
             pair = str(m.get("pair", "—")).replace("/USDT:USDT", "")
             L.append(
                 "| "
                 f"{pair} | "
                 f"{_gate_rate(m, 'do_predict_ok')} | "
+                f"{_gate_rate(m, 'do_predict_trusted')} | "
                 f"{_gate_rate(m, 'di_ok')} | "
                 f"{_gate_rate(m, 'funding_rate_ok')} | "
                 f"{_gate_rate(m, 'guard_base')} | "

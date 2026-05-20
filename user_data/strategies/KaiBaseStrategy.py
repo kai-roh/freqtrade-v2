@@ -444,11 +444,15 @@ class KaiBaseStrategy(IStrategy):
         # 공통 가드: FreqAI 신뢰도 + 펀딩 비율 절대값 + 펀딩 직전 차단
         blackout_min = float(self.funding_blackout_minutes.value)
         volume_ok = dataframe["volume"] > 0
-        do_predict_ok = dataframe["do_predict"] == 1
+        # FreqAI do_predict=1 is fully trusted. For this dry-run expansion,
+        # allow 0 as "usable but less trusted" while still requiring DI/funding/price gates.
+        # do_predict=2 is expired-model/null prediction and remains blocked.
+        do_predict_usable = dataframe["do_predict"].isin([0, 1])
+        do_predict_trusted = dataframe["do_predict"] == 1
         di_ok = dataframe["DI_values"] < self.di_threshold_buy.value
         funding_rate_ok = dataframe["funding_rate"].abs() < self.funding_max.value
         funding_blackout_ok = dataframe["funding_minutes_to_next"] > blackout_min
-        guard_base = do_predict_ok & di_ok & funding_rate_ok & funding_blackout_ok & volume_ok
+        guard_base = do_predict_usable & di_ok & funding_rate_ok & funding_blackout_ok & volume_ok
 
         # 다중 시간프레임 추세 가드 (D-3). informative 미존재/NaN은 1(추세 OK)로 폴백.
         ones = pd.Series(1, index=dataframe.index)
@@ -484,7 +488,8 @@ class KaiBaseStrategy(IStrategy):
             metadata,
             {
                 "volume_ok": volume_ok,
-                "do_predict_ok": do_predict_ok,
+                "do_predict_ok": do_predict_usable,
+                "do_predict_trusted": do_predict_trusted,
                 "di_ok": di_ok,
                 "funding_rate_ok": funding_rate_ok,
                 "funding_blackout_ok": funding_blackout_ok,

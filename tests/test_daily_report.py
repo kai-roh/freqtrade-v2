@@ -125,8 +125,10 @@ def test_entry_gate_metrics_table_renders(monkeypatch, tmp_path):
     md, alerts = dr._build_report(None, [], None, None, None, None, metrics)
     assert alerts == []
     assert "## Entry Gate Metrics" in md
-    assert "| Pair | DoPred | DI | Fund | Base | L Pred | S Pred | L Final | S Final |" in md
-    assert "| SOL | — | — | — | 41.7% | 10.4% | 15.6% | 2 | 3 |" in md
+    assert (
+        "| Pair | PredUse | Pred1 | DI | Fund | Base | L Pred | S Pred | L Final | S Final |" in md
+    )
+    assert "| SOL | — | — | — | — | 41.7% | 10.4% | 15.6% | 2 | 3 |" in md
 
 
 def test_pct_helper_ratio_vs_percent(monkeypatch, tmp_path):
